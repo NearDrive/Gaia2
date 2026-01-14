@@ -20,7 +20,7 @@ public class NeedsAndActionsTests
     public void Drink_ReducesThirst_WhenNearWater()
     {
         Simulation simulation = CreateSimulation(222);
-        AgentState agent = simulation.Agents[0];
+        AgentState agent = simulation.Agents[0].State;
         Vector2 target = FindPositionAdjacentToWater(simulation.World);
         MoveAgentTo(simulation.World, agent, target);
         agent.SetThirst01(0.9f);
@@ -35,7 +35,7 @@ public class NeedsAndActionsTests
     public void Drink_DoesNothing_WhenNotNearWater()
     {
         Simulation simulation = CreateSimulation(333);
-        AgentState agent = simulation.Agents[0];
+        AgentState agent = simulation.Agents[0].State;
         Vector2 target = FindPositionAwayFromWater(simulation.World);
         MoveAgentTo(simulation.World, agent, target);
         agent.SetThirst01(0.9f);

@@ -1,4 +1,5 @@
 using System.Numerics;
+using Core.Evo;
 
 namespace Core.Sim;
 
@@ -6,11 +7,16 @@ public sealed class Simulation
 {
     private const float DrinkAmount = 0.25f;
     private const float DrinkThreshold = 0.6f;
-    private readonly List<AgentState> _agents;
+    private readonly List<Agent> _agents;
     private readonly SimRng _rng;
     private readonly VisionSensor _visionSensor;
 
     public Simulation(SimulationConfig config, int agentCount)
+        : this(config, agentCount, _ => new NoOpBrain())
+    {
+    }
+
+    public Simulation(SimulationConfig config, int agentCount, Func<int, IBrain> brainFactory)
     {
         if (agentCount <= 0)
         {
@@ -27,9 +33,14 @@ public sealed class Simulation
             throw new ArgumentOutOfRangeException(nameof(config.WorldHeight));
         }
 
+        if (brainFactory is null)
+        {
+            throw new ArgumentNullException(nameof(brainFactory));
+        }
+
         Config = config;
         _rng = new SimRng(config.Seed);
-        _agents = new List<AgentState>(agentCount);
+        _agents = new List<Agent>(agentCount);
         World = new GridWorld(config.WorldWidth, config.WorldHeight, config.Seed);
         _visionSensor = new VisionSensor(config.AgentVisionRays, config.AgentVisionRange, config.AgentFov);
 
@@ -38,7 +49,9 @@ public sealed class Simulation
             Vector2 position = new Vector2(
                 _rng.NextFloat(0f, config.WorldWidth),
                 _rng.NextFloat(0f, config.WorldHeight));
-            _agents.Add(new AgentState(position));
+            AgentState state = new(position);
+            IBrain brain = brainFactory(i);
+            _agents.Add(new Agent(state, brain));
         }
     }
 
@@ -48,19 +61,29 @@ public sealed class Simulation
 
     public GridWorld World { get; }
 
-    public IReadOnlyList<AgentState> Agents => _agents;
+    public IReadOnlyList<Agent> Agents => _agents;
+
+    public int DrinkActionsExecuted { get; private set; }
+
+    public int SuccessfulDrinks { get; private set; }
 
     public void Step()
     {
         for (int i = 0; i < _agents.Count; i += 1)
         {
-            AgentState agent = _agents[i];
-            agent.UpdateThirst(Config.Dt, Config.ThirstRatePerSecond, Config.DeathGraceSeconds);
+            Agent agent = _agents[i];
+            AgentState state = agent.State;
+            state.UpdateThirst(Config.Dt, Config.ThirstRatePerSecond, Config.DeathGraceSeconds);
 
-            AgentAction action = DecideAction(agent);
-            ApplyAction(agent, action);
+            float[] vision = _visionSensor.Sense(World, state.Position, 0f);
+            state.UpdateVision(vision);
 
-            if (!agent.IsAlive)
+            BrainInput input = new(vision, state.Thirst01);
+            BrainOutput output = agent.Brain.Think(input);
+            AgentAction action = DecideAction(output);
+            ApplyAction(state, action);
+
+            if (!state.IsAlive)
             {
                 continue;
             }
@@ -69,9 +92,7 @@ public sealed class Simulation
                 _rng.NextFloat(-1f, 1f),
                 _rng.NextFloat(-1f, 1f));
             delta *= Config.Dt;
-            agent.TryApplyDelta(World, delta);
-            float[] vision = _visionSensor.Sense(World, agent.Position, 0f);
-            agent.UpdateVision(vision);
+            state.TryApplyDelta(World, delta);
         }
 
         Tick += 1;
@@ -134,20 +155,23 @@ public sealed class Simulation
             return;
         }
 
-        if (action == AgentAction.Drink && CanDrink(World, agent.Position))
+        if (action != AgentAction.Drink)
         {
+            return;
+        }
+
+        DrinkActionsExecuted += 1;
+
+        if (CanDrink(World, agent.Position))
+        {
+            SuccessfulDrinks += 1;
             agent.ApplyDrink(DrinkAmount);
         }
     }
 
-    private AgentAction DecideAction(AgentState agent)
+    private static AgentAction DecideAction(BrainOutput output)
     {
-        if (!agent.IsAlive)
-        {
-            return AgentAction.None;
-        }
-
-        if (agent.Thirst01 > DrinkThreshold && CanDrink(World, agent.Position))
+        if (output.ActionDrinkScore > DrinkThreshold)
         {
             return AgentAction.Drink;
         }

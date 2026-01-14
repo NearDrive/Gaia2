@@ -7,18 +7,19 @@ public static class SimulationChecksum
     private const ulong OffsetBasis = 14695981039346656037UL;
     private const ulong Prime = 1099511628211UL;
 
-    public static ulong Compute(IReadOnlyList<AgentState> agents, int tick)
+    public static ulong Compute(IReadOnlyList<Agent> agents, int tick)
     {
         ulong hash = OffsetBasis;
 
         Add(ref hash, tick);
         Add(ref hash, agents.Count);
 
-        foreach (AgentState agent in agents)
+        foreach (Agent agent in agents)
         {
-            AddPosition(ref hash, agent.Position);
-            AddThirst(ref hash, agent.Thirst01);
-            Add(ref hash, agent.IsAlive ? (byte)1 : (byte)0);
+            AgentState state = agent.State;
+            AddPosition(ref hash, state.Position);
+            AddThirst(ref hash, state.Thirst01);
+            Add(ref hash, state.IsAlive ? (byte)1 : (byte)0);
         }
 
         return hash;

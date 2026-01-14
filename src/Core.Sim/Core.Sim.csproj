@@ -2,4 +2,7 @@
   <PropertyGroup>
     <AssemblyName>Core.Sim</AssemblyName>
   </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Core.Evo\Core.Evo.csproj" />
+  </ItemGroup>
 </Project>
