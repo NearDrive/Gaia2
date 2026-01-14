@@ -34,7 +34,15 @@ public class SimulationDeterminismTests
 
     private static ulong RunSimulation(int seed, int ticks, int agents, float dt)
     {
-        SimulationConfig config = new(seed, dt, ticks);
+        SimulationConfig config = new(
+            seed,
+            dt,
+            ticks,
+            32,
+            32,
+            8,
+            10f,
+            MathF.PI / 2f);
         Simulation simulation = new(config, agents);
         simulation.Run(ticks);
 

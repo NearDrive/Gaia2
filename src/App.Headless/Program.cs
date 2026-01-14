@@ -3,19 +3,36 @@ using Core.Sim;
 const int DefaultTicks = 10000;
 const int DefaultAgents = 32;
 const float DefaultDt = 1f;
+const int DefaultWorldWidth = 32;
+const int DefaultWorldHeight = 32;
+const int DefaultVisionRays = 8;
+const float DefaultVisionRange = 10f;
+const float DefaultVisionFov = MathF.PI / 2f;
 
 (int seed, int ticks, int agents) = ParseArgs(args);
 
-SimulationConfig config = new(seed, DefaultDt, ticks);
+SimulationConfig config = new(
+    seed,
+    DefaultDt,
+    ticks,
+    DefaultWorldWidth,
+    DefaultWorldHeight,
+    DefaultVisionRays,
+    DefaultVisionRange,
+    DefaultVisionFov);
 Simulation simulation = new(config, agents);
 simulation.Run(ticks);
 
-ulong checksum = SimulationChecksum.Compute(simulation.Agents, simulation.Tick);
+ulong worldChecksum = simulation.World.ComputeChecksum();
+ulong agentsChecksum = SimulationChecksum.Compute(simulation.Agents, simulation.Tick);
+ulong totalChecksum = SimulationChecksum.Combine(worldChecksum, agentsChecksum);
 
 Console.WriteLine($"Seed: {seed}");
 Console.WriteLine($"Ticks: {ticks}");
 Console.WriteLine($"Agents: {agents}");
-Console.WriteLine($"Checksum: {checksum}");
+Console.WriteLine($"WorldChecksum: {worldChecksum}");
+Console.WriteLine($"AgentsChecksum: {agentsChecksum}");
+Console.WriteLine($"TotalChecksum: {totalChecksum}");
 
 static (int Seed, int Ticks, int Agents) ParseArgs(string[] args)
 {
