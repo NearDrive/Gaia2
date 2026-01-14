@@ -42,6 +42,8 @@ public class WorldAndVisionTests
         {
             Assert.Equal(first[i], second[i]);
         }
+
+        Assert.Equal(8 * 3, first.Length);
     }
 
     [Fact]

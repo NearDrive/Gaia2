@@ -26,10 +26,13 @@ simulation.Run(ticks);
 ulong worldChecksum = simulation.World.ComputeChecksum();
 ulong agentsChecksum = SimulationChecksum.Compute(simulation.Agents, simulation.Tick);
 ulong totalChecksum = SimulationChecksum.Combine(worldChecksum, agentsChecksum);
+(int aliveCount, float minThirst, float avgThirst, float maxThirst) = SummarizeThirst(simulation.Agents);
 
 Console.WriteLine($"Seed: {seed}");
 Console.WriteLine($"Ticks: {ticks}");
 Console.WriteLine($"Agents: {agents}");
+Console.WriteLine($"Alive: {aliveCount}");
+Console.WriteLine($"Thirst01 Min/Avg/Max: {minThirst:0.000}/{avgThirst:0.000}/{maxThirst:0.000}");
 Console.WriteLine($"WorldChecksum: {worldChecksum}");
 Console.WriteLine($"AgentsChecksum: {agentsChecksum}");
 Console.WriteLine($"TotalChecksum: {totalChecksum}");
@@ -92,4 +95,39 @@ static int ParseIntValue(string[] args, ref int index, string name)
     }
 
     return value;
+}
+
+static (int AliveCount, float MinThirst, float AvgThirst, float MaxThirst) SummarizeThirst(
+    IReadOnlyList<AgentState> agents)
+{
+    if (agents.Count == 0)
+    {
+        return (0, 0f, 0f, 0f);
+    }
+
+    int alive = 0;
+    float min = float.MaxValue;
+    float max = float.MinValue;
+    float total = 0f;
+
+    foreach (AgentState agent in agents)
+    {
+        if (agent.IsAlive)
+        {
+            alive += 1;
+        }
+
+        float thirst = Quantize(agent.Thirst01);
+        min = Math.Min(min, thirst);
+        max = Math.Max(max, thirst);
+        total += thirst;
+    }
+
+    float avg = Quantize(total / agents.Count);
+    return (alive, min, avg, max);
+}
+
+static float Quantize(float value)
+{
+    return MathF.Round(value * 1000f) / 1000f;
 }

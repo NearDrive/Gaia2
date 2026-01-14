@@ -42,7 +42,7 @@ public sealed class VisionSensor
             throw new ArgumentNullException(nameof(world));
         }
 
-        float[] results = new float[RayCount * 2];
+        float[] results = new float[RayCount * 3];
         float startAngle = agentFacingRadians - (FovRadians * 0.5f);
         float angleStep = RayCount > 1 ? FovRadians / (RayCount - 1) : 0f;
 
@@ -52,6 +52,7 @@ public sealed class VisionSensor
             Vector2 direction = new Vector2(MathF.Cos(angle), MathF.Sin(angle));
             float distanceNorm = 1f;
             float embedding = 0f;
+            float affordance = 0f;
 
             for (float distance = StepSize; distance <= MaxDistance; distance += StepSize)
             {
@@ -81,13 +82,15 @@ public sealed class VisionSensor
                 {
                     distanceNorm = Quantize(distance / MaxDistance);
                     embedding = HashToUnitFloat(hitId);
+                    affordance = hitId == TileId.Water ? 1f : 0f;
                     break;
                 }
             }
 
-            int offset = i * 2;
+            int offset = i * 3;
             results[offset] = distanceNorm;
             results[offset + 1] = embedding;
+            results[offset + 2] = affordance;
         }
 
         return results;

@@ -32,6 +32,20 @@ public class SimulationDeterminismTests
         Assert.NotEqual(first, second);
     }
 
+    [Fact]
+    public void Determinism_SameSeed_SameOutcome_WithNeeds()
+    {
+        const int seed = 54321;
+        const int ticks = 5000;
+        const int agents = 16;
+        const float dt = 1f;
+
+        ulong first = RunSimulation(seed, ticks, agents, dt);
+        ulong second = RunSimulation(seed, ticks, agents, dt);
+
+        Assert.Equal(first, second);
+    }
+
     private static ulong RunSimulation(int seed, int ticks, int agents, float dt)
     {
         SimulationConfig config = new(
@@ -42,7 +56,9 @@ public class SimulationDeterminismTests
             32,
             8,
             10f,
-            MathF.PI / 2f);
+            MathF.PI / 2f,
+            0.05f,
+            2f);
         Simulation simulation = new(config, agents);
         simulation.Run(ticks);
 
