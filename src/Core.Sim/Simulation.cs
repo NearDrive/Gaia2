@@ -77,6 +77,52 @@ public sealed class Simulation
         Tick += 1;
     }
 
+    public int Step(IBrain brain)
+    {
+        if (brain is null)
+        {
+            throw new ArgumentNullException(nameof(brain));
+        }
+
+        int successfulDrinks = 0;
+
+        for (int i = 0; i < _agents.Count; i += 1)
+        {
+            AgentState agent = _agents[i];
+            agent.UpdateThirst(Config.Dt, Config.ThirstRatePerSecond, Config.DeathGraceSeconds);
+
+            if (!agent.IsAlive)
+            {
+                continue;
+            }
+
+            float thirstBeforeAction = agent.Thirst01;
+            AgentAction action = brain.DecideAction(agent, this);
+            ApplyAction(agent, action);
+
+            if (agent.Thirst01 < thirstBeforeAction)
+            {
+                successfulDrinks += 1;
+            }
+
+            if (!agent.IsAlive)
+            {
+                continue;
+            }
+
+            Vector2 delta = new Vector2(
+                _rng.NextFloat(-1f, 1f),
+                _rng.NextFloat(-1f, 1f));
+            delta *= Config.Dt;
+            agent.TryApplyDelta(World, delta);
+            float[] vision = _visionSensor.Sense(World, agent.Position, 0f);
+            agent.UpdateVision(vision);
+        }
+
+        Tick += 1;
+        return successfulDrinks;
+    }
+
     public void Run(int ticks)
     {
         if (ticks < 0)
