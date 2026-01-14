@@ -8,4 +8,6 @@ public readonly record struct SimulationConfig(
     int WorldHeight,
     int AgentVisionRays,
     float AgentVisionRange,
-    float AgentFov);
+    float AgentFov,
+    float ThirstRatePerSecond = 0.01f,
+    float DeathGraceSeconds = 3f);

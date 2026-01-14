@@ -4,6 +4,8 @@ namespace Core.Sim;
 
 public sealed class Simulation
 {
+    private const float DrinkAmount = 0.25f;
+    private const float DrinkThreshold = 0.6f;
     private readonly List<AgentState> _agents;
     private readonly SimRng _rng;
     private readonly VisionSensor _visionSensor;
@@ -52,13 +54,24 @@ public sealed class Simulation
     {
         for (int i = 0; i < _agents.Count; i += 1)
         {
+            AgentState agent = _agents[i];
+            agent.UpdateThirst(Config.Dt, Config.ThirstRatePerSecond, Config.DeathGraceSeconds);
+
+            AgentAction action = DecideAction(agent);
+            ApplyAction(agent, action);
+
+            if (!agent.IsAlive)
+            {
+                continue;
+            }
+
             Vector2 delta = new Vector2(
                 _rng.NextFloat(-1f, 1f),
                 _rng.NextFloat(-1f, 1f));
             delta *= Config.Dt;
-            _agents[i].TryApplyDelta(World, delta);
-            float[] vision = _visionSensor.Sense(World, _agents[i].Position, 0f);
-            _agents[i].UpdateVision(vision);
+            agent.TryApplyDelta(World, delta);
+            float[] vision = _visionSensor.Sense(World, agent.Position, 0f);
+            agent.UpdateVision(vision);
         }
 
         Tick += 1;
@@ -75,5 +88,70 @@ public sealed class Simulation
         {
             Step();
         }
+    }
+
+    public static bool CanDrink(GridWorld world, Vector2 position)
+    {
+        if (world is null)
+        {
+            throw new ArgumentNullException(nameof(world));
+        }
+
+        int tileX = (int)MathF.Floor(position.X);
+        int tileY = (int)MathF.Floor(position.Y);
+
+        for (int dy = -1; dy <= 1; dy += 1)
+        {
+            for (int dx = -1; dx <= 1; dx += 1)
+            {
+                int nx = tileX + dx;
+                int ny = tileY + dy;
+
+                if (!world.InBounds(nx, ny))
+                {
+                    continue;
+                }
+
+                if (world.GetTile(nx, ny).Id == TileId.Water)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    public void ApplyAction(AgentState agent, AgentAction action)
+    {
+        if (agent is null)
+        {
+            throw new ArgumentNullException(nameof(agent));
+        }
+
+        if (!agent.IsAlive)
+        {
+            return;
+        }
+
+        if (action == AgentAction.Drink && CanDrink(World, agent.Position))
+        {
+            agent.ApplyDrink(DrinkAmount);
+        }
+    }
+
+    private AgentAction DecideAction(AgentState agent)
+    {
+        if (!agent.IsAlive)
+        {
+            return AgentAction.None;
+        }
+
+        if (agent.Thirst01 > DrinkThreshold && CanDrink(World, agent.Position))
+        {
+            return AgentAction.Drink;
+        }
+
+        return AgentAction.None;
     }
 }
