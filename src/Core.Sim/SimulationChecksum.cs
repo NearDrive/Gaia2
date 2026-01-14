@@ -22,6 +22,14 @@ public static class SimulationChecksum
         return hash;
     }
 
+    public static ulong Combine(ulong worldChecksum, ulong agentsChecksum)
+    {
+        ulong hash = OffsetBasis;
+        Add(ref hash, worldChecksum);
+        Add(ref hash, agentsChecksum);
+        return hash;
+    }
+
     private static void AddPosition(ref ulong hash, Vector2 position)
     {
         int x = (int)MathF.Round(position.X * 1000f);
@@ -35,6 +43,15 @@ public static class SimulationChecksum
         unchecked
         {
             hash ^= (uint)value;
+            hash *= Prime;
+        }
+    }
+
+    private static void Add(ref ulong hash, ulong value)
+    {
+        unchecked
+        {
+            hash ^= value;
             hash *= Prime;
         }
     }
