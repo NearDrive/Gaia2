@@ -156,19 +156,7 @@ public sealed class Simulation
 
             BrainInput input = new(agent.LastVision, agent.Thirst01, 1f);
             BrainOutput output = brain.DecideAction(input);
-            Vector2 delta = ComputeMovementDelta(output);
-            ApplyMovement(agent, delta);
-
-            float thirstBeforeAction = agent.Thirst01;
-            if (output.ActionDrinkScore > DrinkThreshold)
-            {
-                ApplyAction(agent, AgentAction.Drink);
-            }
-
-            if (agent.Thirst01 < thirstBeforeAction)
-            {
-                successfulDrinks += 1;
-            }
+            successfulDrinks += ApplyBrainOutput(agent, output);
 
             if (!agent.IsAlive)
             {
@@ -178,6 +166,70 @@ public sealed class Simulation
             float[] vision = agent.LastVision;
             _visionSensor.Sense(World, agent.Position, 0f, vision);
             agent.UpdateVision(vision);
+        }
+
+        Tick += 1;
+        return successfulDrinks;
+    }
+
+    public int Step(IBrain brain, out BrainOutput output)
+    {
+        if (brain is null)
+        {
+            throw new ArgumentNullException(nameof(brain));
+        }
+
+        if (_agents.Count != 1)
+        {
+            throw new InvalidOperationException("Replay capture requires a single agent.");
+        }
+
+        AgentState agent = _agents[0];
+        agent.UpdateThirst(Config.Dt, Config.ThirstRatePerSecond, Config.DeathGraceSeconds);
+
+        output = default;
+        int successfulDrinks = 0;
+
+        if (agent.IsAlive)
+        {
+            BrainInput input = new(agent.LastVision, agent.Thirst01, 1f);
+            output = brain.DecideAction(input);
+            successfulDrinks = ApplyBrainOutput(agent, output);
+
+            if (agent.IsAlive)
+            {
+                float[] vision = agent.LastVision;
+                _visionSensor.Sense(World, agent.Position, 0f, vision);
+                agent.UpdateVision(vision);
+            }
+        }
+
+        Tick += 1;
+        return successfulDrinks;
+    }
+
+    public int Step(BrainOutput output)
+    {
+        if (_agents.Count != 1)
+        {
+            throw new InvalidOperationException("Replay verification requires a single agent.");
+        }
+
+        AgentState agent = _agents[0];
+        agent.UpdateThirst(Config.Dt, Config.ThirstRatePerSecond, Config.DeathGraceSeconds);
+
+        int successfulDrinks = 0;
+
+        if (agent.IsAlive)
+        {
+            successfulDrinks = ApplyBrainOutput(agent, output);
+
+            if (agent.IsAlive)
+            {
+                float[] vision = agent.LastVision;
+                _visionSensor.Sense(World, agent.Position, 0f, vision);
+                agent.UpdateVision(vision);
+            }
         }
 
         Tick += 1;
@@ -299,6 +351,20 @@ public sealed class Simulation
 
         float speed = Config.AgentMaxSpeed * magnitude;
         return direction * (speed * Config.Dt);
+    }
+
+    private int ApplyBrainOutput(AgentState agent, BrainOutput output)
+    {
+        Vector2 delta = ComputeMovementDelta(output);
+        ApplyMovement(agent, delta);
+
+        float thirstBeforeAction = agent.Thirst01;
+        if (output.Drink01 > DrinkThreshold)
+        {
+            ApplyAction(agent, AgentAction.Drink);
+        }
+
+        return agent.Thirst01 < thirstBeforeAction ? 1 : 0;
     }
 
     private static Vector2 FindSpawnNearWater(GridWorld world, Vector2 anchor, int radius)

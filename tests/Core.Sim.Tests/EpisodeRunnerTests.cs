@@ -3,6 +3,7 @@ using Core.Evo;
 using Core.Sim;
 using Xunit;
 using Xunit.Abstractions;
+using SimBrainOutput = Core.Sim.BrainOutput;
 
 namespace Core.Sim.Tests;
 
@@ -136,39 +137,33 @@ public class EpisodeRunnerTests
 
     private sealed class NoDrinkBrain : IBrain
     {
-        public BrainOutput DecideAction(BrainInput input)
+        public SimBrainOutput DecideAction(BrainInput input)
         {
-            return new BrainOutput();
+            return default;
         }
     }
 
     private sealed class AlwaysDrinkBrain : IBrain
     {
-        public BrainOutput DecideAction(BrainInput input)
+        public SimBrainOutput DecideAction(BrainInput input)
         {
-            return new BrainOutput
-            {
-                ActionDrinkScore = 1f
-            };
+            return new SimBrainOutput(0f, 0f, 1f);
         }
     }
 
     private sealed class StationaryBrain : IBrain
     {
-        public BrainOutput DecideAction(BrainInput input)
+        public SimBrainOutput DecideAction(BrainInput input)
         {
-            return new BrainOutput();
+            return default;
         }
     }
 
     private sealed class StraightLineBrain : IBrain
     {
-        public BrainOutput DecideAction(BrainInput input)
+        public SimBrainOutput DecideAction(BrainInput input)
         {
-            return new BrainOutput
-            {
-                MoveX = 1f
-            };
+            return new SimBrainOutput(1f, 0f, 0f);
         }
     }
 }

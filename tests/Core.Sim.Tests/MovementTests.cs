@@ -2,6 +2,7 @@ using System.Numerics;
 using Core.Evo;
 using Core.Sim;
 using Xunit;
+using SimBrainOutput = Core.Sim.BrainOutput;
 
 namespace Core.Sim.Tests;
 
@@ -13,7 +14,7 @@ public class MovementTests
         SimulationConfig config = CreateConfig(agentMaxSpeed: 0.4f, moveDeadzone: 0.05f, seed: 10);
         Vector2 start = FindEmptyTilePosition(config);
         Simulation simulation = new(config, new[] { start });
-        IBrain brain = new ConstantBrain(new BrainOutput { MoveX = 10f, MoveY = 0f });
+        IBrain brain = new ConstantBrain(new SimBrainOutput(10f, 0f, 0f));
 
         simulation.Step(brain);
 
@@ -27,7 +28,7 @@ public class MovementTests
         SimulationConfig config = CreateConfig(agentMaxSpeed: 0.2f, moveDeadzone: 0.05f, seed: 20);
         Vector2 start = FindEmptyTilePosition(config);
         Simulation simulation = new(config, new[] { start });
-        IBrain brain = new ConstantBrain(new BrainOutput { MoveX = 1f, MoveY = 0f });
+        IBrain brain = new ConstantBrain(new SimBrainOutput(1f, 0f, 0f));
 
         simulation.Step(brain);
 
@@ -40,7 +41,7 @@ public class MovementTests
         SimulationConfig config = CreateConfig(agentMaxSpeed: 0.4f, moveDeadzone: 0.05f, seed: 30);
         Vector2 start = FindEmptyTilePosition(config);
         Simulation simulation = new(config, new[] { start });
-        IBrain brain = new ConstantBrain(new BrainOutput { MoveX = 0.01f, MoveY = 0.01f });
+        IBrain brain = new ConstantBrain(new SimBrainOutput(0.01f, 0.01f, 0f));
 
         simulation.Step(brain);
 
@@ -52,7 +53,7 @@ public class MovementTests
     {
         SimulationConfig config = CreateConfig(agentMaxSpeed: 0.3f, moveDeadzone: 0.05f, seed: 40);
         Vector2 start = FindEmptyTilePosition(config);
-        IBrain brain = new ConstantBrain(new BrainOutput { MoveX = 0.4f, MoveY = -0.2f });
+        IBrain brain = new ConstantBrain(new SimBrainOutput(0.4f, -0.2f, 0f));
 
         Simulation first = new(config, new[] { start });
         Simulation second = new(config, new[] { start });
@@ -104,14 +105,14 @@ public class MovementTests
 
     private sealed class ConstantBrain : IBrain
     {
-        private readonly BrainOutput _output;
+        private readonly SimBrainOutput _output;
 
-        public ConstantBrain(BrainOutput output)
+        public ConstantBrain(SimBrainOutput output)
         {
             _output = output;
         }
 
-        public BrainOutput DecideAction(BrainInput input)
+        public SimBrainOutput DecideAction(BrainInput input)
         {
             return _output;
         }

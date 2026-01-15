@@ -14,7 +14,16 @@ public sealed class EpisodeRunner
         _baseConfig = baseConfig;
     }
 
-    public EpisodeResult RunEpisode(IBrain brain, int seed, int ticks, int agentCount = 1)
+    public Replay? LastReplay { get; private set; }
+
+    public EpisodeResult RunEpisode(
+        IBrain brain,
+        int seed,
+        int ticks,
+        int agentCount = 1,
+        bool captureReplay = false,
+        Scenario? scenario = null,
+        string? brainInfo = null)
     {
         if (brain is null)
         {
@@ -38,7 +47,7 @@ public sealed class EpisodeRunner
         };
 
         Simulation simulation = new(config, agentCount);
-        return RunEpisodeInternal(brain, seed, ticks, simulation);
+        return RunEpisodeInternal(brain, seed, ticks, simulation, captureReplay, scenario, brainInfo);
     }
 
     public EpisodeResult RunEpisode(IBrain brain, int seed, int ticks, IReadOnlyList<Vector2> initialAgentPositions)
@@ -70,10 +79,17 @@ public sealed class EpisodeRunner
         };
 
         Simulation simulation = new(config, initialAgentPositions);
-        return RunEpisodeInternal(brain, seed, ticks, simulation);
+        return RunEpisodeInternal(brain, seed, ticks, simulation, captureReplay: false, scenario: null, brainInfo: null);
     }
 
-    private static EpisodeResult RunEpisodeInternal(IBrain brain, int seed, int ticks, Simulation simulation)
+    private EpisodeResult RunEpisodeInternal(
+        IBrain brain,
+        int seed,
+        int ticks,
+        Simulation simulation,
+        bool captureReplay,
+        Scenario? scenario,
+        string? brainInfo)
     {
         int ticksSurvived = 0;
         int successfulDrinks = 0;
@@ -81,12 +97,35 @@ public sealed class EpisodeRunner
         long thirstSamples = 0;
         HashSet<(int X, int Y)> visitedCells = new();
         HashSet<(int X, int Y)> drinkableCellsVisited = new();
+        List<ReplayTick>? replayTicks = null;
+
+        if (captureReplay)
+        {
+            if (simulation.Agents.Count != 1)
+            {
+                throw new InvalidOperationException("Replay capture only supports a single agent.");
+            }
+
+            replayTicks = new List<ReplayTick>(ticks);
+        }
 
         TrackVisitedCells(simulation, visitedCells, drinkableCellsVisited);
 
         for (int i = 0; i < ticks; i += 1)
         {
-            successfulDrinks += simulation.Step(brain);
+            BrainOutput output = default;
+            int stepDrinks;
+
+            if (captureReplay)
+            {
+                stepDrinks = simulation.Step(brain, out output);
+            }
+            else
+            {
+                stepDrinks = simulation.Step(brain);
+            }
+
+            successfulDrinks += stepDrinks;
             ticksSurvived += 1;
 
             TrackVisitedCells(simulation, visitedCells, drinkableCellsVisited);
@@ -96,6 +135,24 @@ public sealed class EpisodeRunner
                 int thirstMilli = (int)MathF.Round(agent.Thirst01 * 1000f);
                 thirstSumMilli += thirstMilli;
                 thirstSamples += 1;
+            }
+
+            if (captureReplay && replayTicks is not null)
+            {
+                AgentState agent = simulation.Agents[0];
+                replayTicks.Add(new ReplayTick
+                {
+                    Tick = i,
+                    Ax = agent.Position.X,
+                    Ay = agent.Position.Y,
+                    Thirst01 = agent.Thirst01,
+                    Alive = agent.IsAlive,
+                    OutMoveX = output.MoveX,
+                    OutMoveY = output.MoveY,
+                    OutDrink = output.Drink01,
+                    SuccessfulDrinksTotal = successfulDrinks,
+                    VisitedCells = visitedCells.Count
+                });
             }
 
             if (AreAllAgentsDead(simulation.Agents))
@@ -126,6 +183,30 @@ public sealed class EpisodeRunner
         ulong worldChecksum = simulation.World.ComputeChecksum();
         ulong agentsChecksum = SimulationChecksum.Compute(simulation.Agents, simulation.Tick);
         ulong totalChecksum = SimulationChecksum.Combine(worldChecksum, agentsChecksum);
+
+        if (captureReplay && replayTicks is not null)
+        {
+            LastReplay = new Replay
+            {
+                Header = new ReplayHeader
+                {
+                    Seed = seed,
+                    Scenario = scenario,
+                    WorldWidth = simulation.Config.WorldWidth,
+                    WorldHeight = simulation.Config.WorldHeight,
+                    Dt = simulation.Config.Dt,
+                    Ticks = replayTicks.Count,
+                    WorldChecksum = worldChecksum,
+                    BrainInfo = brainInfo ?? string.Empty
+                },
+                Ticks = replayTicks,
+                FinalChecksum = totalChecksum
+            };
+        }
+        else
+        {
+            LastReplay = null;
+        }
 
         return new EpisodeResult(
             seed,

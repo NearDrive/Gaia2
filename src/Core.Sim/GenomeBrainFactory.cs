@@ -151,12 +151,7 @@ public sealed class GenomeBrainFactory
             float drinkRaw = _outputCount > 2 ? _outputs[2] : 0f;
             float drinkScore = Math.Clamp((drinkRaw + 1f) * 0.5f, 0f, 1f);
 
-            return new BrainOutput
-            {
-                MoveX = moveX,
-                MoveY = moveY,
-                ActionDrinkScore = drinkScore
-            };
+            return new BrainOutput(moveX, moveY, drinkScore);
         }
 
         private int[] BuildTopologicalOrder()

@@ -1,7 +1,9 @@
 using System.Globalization;
+using System.Security.Cryptography;
 using System.Text;
 using Core.Evo;
 using Core.Sim;
+using SimBrainOutput = Core.Sim.BrainOutput;
 
 namespace App.Headless;
 
@@ -47,9 +49,23 @@ internal static class Program
             DefaultAgentMaxSpeed,
             DefaultMoveDeadzone);
 
+        if (options.Mode == RunMode.ReplayVerify && string.IsNullOrWhiteSpace(options.InPath))
+        {
+            Console.Error.WriteLine("Missing --in <path> for replay-verify.");
+            return 2;
+        }
+
         if (options.Mode == RunMode.Benchmark)
         {
             RunBenchmark(options, config);
+        }
+        else if (options.Mode == RunMode.Replay)
+        {
+            RunReplay(options, config);
+        }
+        else if (options.Mode == RunMode.ReplayVerify)
+        {
+            return RunReplayVerify(options, config);
         }
         else if (options.Mode == RunMode.Sim)
         {
@@ -137,6 +153,8 @@ internal static class Program
         string comparePathB = string.Empty;
         string genomePath = string.Empty;
         string scenariosPath = "default";
+        string outPath = string.Empty;
+        string inPath = string.Empty;
 
         for (int i = 0; i < args.Length; i += 1)
         {
@@ -184,6 +202,12 @@ internal static class Program
                 case "--scenarios":
                     scenariosPath = ParseStringValue(args, ref i, "--scenarios");
                     break;
+                case "--out":
+                    outPath = ParseStringValue(args, ref i, "--out");
+                    break;
+                case "--in":
+                    inPath = ParseStringValue(args, ref i, "--in");
+                    break;
                 case "--a":
                     comparePathA = ParseStringValue(args, ref i, "--a");
                     break;
@@ -195,7 +219,11 @@ internal static class Program
             }
         }
 
-        if (!seed.HasValue && mode != RunMode.Train && mode != RunMode.Compare && mode != RunMode.Benchmark)
+        if (!seed.HasValue
+            && mode != RunMode.Train
+            && mode != RunMode.Compare
+            && mode != RunMode.Benchmark
+            && mode != RunMode.ReplayVerify)
         {
             throw new ArgumentException("Missing required --seed <int> argument.");
         }
@@ -219,6 +247,7 @@ internal static class Program
         {
             throw new ArgumentException("Missing required --a <manifestA> and --b <manifestB> arguments for compare mode.");
         }
+
 
         if (ticks <= 0)
         {
@@ -281,7 +310,9 @@ internal static class Program
             comparePathA,
             comparePathB,
             genomePath,
-            scenariosPath);
+            scenariosPath,
+            inPath,
+            outPath);
     }
 
     private static int ParseIntValue(string[] args, ref int index, string name)
@@ -322,7 +353,9 @@ internal static class Program
             "train" => RunMode.Train,
             "compare" => RunMode.Compare,
             "benchmark" => RunMode.Benchmark,
-            _ => throw new ArgumentException($"Invalid mode '{value}'. Use 'sim', 'episode', 'train', 'compare', or 'benchmark'.")
+            "replay" => RunMode.Replay,
+            "replay-verify" => RunMode.ReplayVerify,
+            _ => throw new ArgumentException("Invalid mode '" + value + "'. Use 'sim', 'episode', 'train', 'compare', 'benchmark', 'replay', or 'replay-verify'.")
         };
     }
 
@@ -397,6 +430,26 @@ internal static class Program
 
         GenomeBrainFactory factory = new();
         return factory.CreateBrain(genome, inputCount, outputCount);
+    }
+
+    private static IBrain ResolveReplayBrain(Options options, SimulationConfig simConfig, out string brainInfo)
+    {
+        if (string.Equals(options.Brain, "neat", StringComparison.Ordinal))
+        {
+            string genomePath = string.IsNullOrWhiteSpace(options.GenomePath)
+                ? Path.Combine("artifacts", "best.json")
+                : options.GenomePath;
+            brainInfo = BuildBrainInfo(genomePath);
+            return CreateGenomeBrain(genomePath, simConfig);
+        }
+
+        if (string.Equals(options.Brain, "none", StringComparison.Ordinal))
+        {
+            brainInfo = "none";
+            return new NoneBrain();
+        }
+
+        throw new ArgumentException($"Unknown brain '{options.Brain}'. Use 'none' or 'neat'.");
     }
 
     private static CurriculumSchedule CreateDefaultCurriculum(Options options, SimulationConfig simConfig)
@@ -711,13 +764,66 @@ internal static class Program
         BenchmarkCsvWriter.Write(csvPath, report);
     }
 
+    internal static void RunReplay(Options options, SimulationConfig simConfig)
+    {
+        EpisodeRunner runner = new(simConfig);
+        IBrain brain = ResolveReplayBrain(options, simConfig, out string brainInfo);
+
+        EpisodeResult result = runner.RunEpisode(
+            brain,
+            options.Seed,
+            options.Ticks,
+            agentCount: 1,
+            captureReplay: true,
+            scenario: null,
+            brainInfo: brainInfo);
+
+        Replay replay = runner.LastReplay ?? throw new InvalidOperationException("Replay capture failed.");
+        string outputPath = string.IsNullOrWhiteSpace(options.OutPath)
+            ? Path.Combine("artifacts", "replays", $"replay_seed{options.Seed}.json")
+            : options.OutPath;
+        string? outputDirectory = Path.GetDirectoryName(outputPath);
+        if (!string.IsNullOrWhiteSpace(outputDirectory))
+        {
+            Directory.CreateDirectory(outputDirectory);
+        }
+
+        ReplayJson.Write(outputPath, replay);
+
+        Console.WriteLine($"Replay saved: {outputPath}");
+        Console.WriteLine($"TicksSurvived: {result.TicksSurvived}");
+        Console.WriteLine($"FinalChecksum: {replay.FinalChecksum}");
+    }
+
+    internal static int RunReplayVerify(Options options, SimulationConfig simConfig)
+    {
+        Replay replay = ReplayJson.Read(options.InPath);
+        ReplayVerificationResult result = ReplayVerifier.Verify(replay, simConfig);
+
+        if (result.Success)
+        {
+            Console.WriteLine("VERIFY OK");
+            return 0;
+        }
+
+        Console.WriteLine("VERIFY FAIL");
+        Console.WriteLine($"ExpectedChecksum: {result.ExpectedChecksum}");
+        Console.WriteLine($"ComputedChecksum: {result.ComputedChecksum}");
+        Console.WriteLine($"ExpectedWorldChecksum: {result.ExpectedWorldChecksum}");
+        Console.WriteLine($"ComputedWorldChecksum: {result.ComputedWorldChecksum}");
+        Console.WriteLine($"TicksSimulated: {result.TicksSimulated}");
+        return 1;
+    }
+
     internal enum RunMode
     {
         Sim,
         Episode,
         Train,
         Compare,
-        Benchmark
+        Benchmark,
+        Replay,
+        ReplayVerify
     }
 
     internal readonly record struct Options(
@@ -735,7 +841,20 @@ internal static class Program
         string ComparePathA,
         string ComparePathB,
         string GenomePath,
-        string ScenariosPath);
+        string ScenariosPath,
+        string InPath = "",
+        string OutPath = "");
+
+    private static string BuildBrainInfo(string genomePath)
+    {
+        FileInfo info = new(genomePath);
+        using FileStream stream = File.OpenRead(genomePath);
+        using SHA256 sha256 = SHA256.Create();
+        byte[] hash = sha256.ComputeHash(stream);
+        string hashHex = Convert.ToHexString(hash).ToLowerInvariant();
+        string fileName = Path.GetFileName(genomePath);
+        return $"{fileName} sha256={hashHex} size={info.Length}";
+    }
 
     internal readonly record struct ManifestComparisonResult(bool Equivalent, IReadOnlyList<string> Differences);
 
@@ -796,22 +915,18 @@ internal static class Program
 
     private sealed class NoneBrain : IBrain
     {
-        public BrainOutput DecideAction(BrainInput input)
+        public SimBrainOutput DecideAction(BrainInput input)
         {
-            return new BrainOutput();
+            return default;
         }
     }
 
     private sealed class HeuristicBrain : IBrain
     {
-        public BrainOutput DecideAction(BrainInput input)
+        public SimBrainOutput DecideAction(BrainInput input)
         {
             float drinkScore = input.Thirst01 > 0.6f ? 1f : 0f;
-            return new BrainOutput
-            {
-                MoveX = 0.5f,
-                ActionDrinkScore = drinkScore
-            };
+            return new SimBrainOutput(0.5f, 0f, drinkScore);
         }
     }
 
