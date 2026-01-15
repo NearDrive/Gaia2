@@ -34,6 +34,7 @@ public sealed class GenomeBrainFactory
         private readonly Dictionary<int, int> _nodeIndexById;
         private readonly List<ConnectionGene>[] _incoming;
         private readonly float[] _inputs;
+        private readonly float[] _activations;
 
         public GenomeBrain(Genome genome, int inputCount, int outputCount)
         {
@@ -42,6 +43,7 @@ public sealed class GenomeBrainFactory
             _inputCount = inputCount;
             _outputCount = outputCount;
             _inputs = new float[inputCount];
+            _activations = new float[_nodes.Count];
 
             _nodeIndexById = new Dictionary<int, int>(_nodes.Count);
             for (int i = 0; i < _nodes.Count; i += 1)
@@ -88,14 +90,14 @@ public sealed class GenomeBrainFactory
 
             _inputs[_inputCount - 1] = agent.Thirst01;
 
-            float[] activations = new float[_nodes.Count];
+            Array.Clear(_activations, 0, _activations.Length);
 
             int inputIndex = 0;
             for (int i = 0; i < _nodes.Count && inputIndex < _inputCount; i += 1)
             {
                 if (_nodes[i].Type == NodeType.Input)
                 {
-                    activations[i] = _inputs[inputIndex];
+                    _activations[i] = _inputs[inputIndex];
                     inputIndex += 1;
                 }
             }
@@ -116,10 +118,10 @@ public sealed class GenomeBrainFactory
                         continue;
                     }
 
-                    sum += activations[inIndex] * connection.Weight;
+                    sum += _activations[inIndex] * connection.Weight;
                 }
 
-                activations[nodeIndex] = (float)Math.Tanh(sum);
+                _activations[nodeIndex] = (float)Math.Tanh(sum);
             }
 
             float outputValue = 0f;
@@ -133,7 +135,7 @@ public sealed class GenomeBrainFactory
 
                 if (outputSeen == 0)
                 {
-                    outputValue = activations[i];
+                    outputValue = _activations[i];
                 }
 
                 outputSeen += 1;

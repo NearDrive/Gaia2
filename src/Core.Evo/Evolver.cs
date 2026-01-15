@@ -105,7 +105,11 @@ public sealed class Evolver
             scored.Add((i, fitnesses[i] - penalty));
         }
 
-        scored.Sort((a, b) => b.Fitness.CompareTo(a.Fitness));
+        scored.Sort((a, b) =>
+        {
+            int fitnessCompare = b.Fitness.CompareTo(a.Fitness);
+            return fitnessCompare != 0 ? fitnessCompare : a.Index.CompareTo(b.Index);
+        });
 
         int eliteCount = Math.Min(_config.EliteCount, scored.Count);
         int selectionCount = Math.Max(1, (int)Math.Ceiling(scored.Count * SelectionFraction));

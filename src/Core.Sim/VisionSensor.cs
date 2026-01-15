@@ -43,6 +43,27 @@ public sealed class VisionSensor
         }
 
         float[] results = new float[RayCount * 3];
+        Sense(world, agentPos, agentFacingRadians, results);
+        return results;
+    }
+
+    public void Sense(GridWorld world, Vector2 agentPos, float agentFacingRadians, float[] results)
+    {
+        if (world is null)
+        {
+            throw new ArgumentNullException(nameof(world));
+        }
+
+        if (results is null)
+        {
+            throw new ArgumentNullException(nameof(results));
+        }
+
+        if (results.Length < RayCount * 3)
+        {
+            throw new ArgumentException("Results buffer is too small.", nameof(results));
+        }
+
         float startAngle = agentFacingRadians - (FovRadians * 0.5f);
         float angleStep = RayCount > 1 ? FovRadians / (RayCount - 1) : 0f;
 
@@ -92,8 +113,6 @@ public sealed class VisionSensor
             results[offset + 1] = embedding;
             results[offset + 2] = affordance;
         }
-
-        return results;
     }
 
     private static float Quantize(float value)

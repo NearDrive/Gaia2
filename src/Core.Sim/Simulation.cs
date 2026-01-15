@@ -38,7 +38,7 @@ public sealed class Simulation
             Vector2 position = new Vector2(
                 _rng.NextFloat(0f, config.WorldWidth),
                 _rng.NextFloat(0f, config.WorldHeight));
-            _agents.Add(new AgentState(position));
+            _agents.Add(new AgentState(position, CreateVisionBuffer()));
         }
     }
 
@@ -72,7 +72,7 @@ public sealed class Simulation
 
         foreach (Vector2 position in initialPositions)
         {
-            _agents.Add(new AgentState(position));
+            _agents.Add(new AgentState(position, CreateVisionBuffer()));
         }
     }
 
@@ -104,7 +104,8 @@ public sealed class Simulation
                 _rng.NextFloat(-1f, 1f));
             delta *= Config.Dt;
             agent.TryApplyDelta(World, delta);
-            float[] vision = _visionSensor.Sense(World, agent.Position, 0f);
+            float[] vision = agent.LastVision;
+            _visionSensor.Sense(World, agent.Position, 0f, vision);
             agent.UpdateVision(vision);
         }
 
@@ -149,7 +150,8 @@ public sealed class Simulation
                 _rng.NextFloat(-1f, 1f));
             delta *= Config.Dt;
             agent.TryApplyDelta(World, delta);
-            float[] vision = _visionSensor.Sense(World, agent.Position, 0f);
+            float[] vision = agent.LastVision;
+            _visionSensor.Sense(World, agent.Position, 0f, vision);
             agent.UpdateVision(vision);
         }
 
@@ -233,5 +235,10 @@ public sealed class Simulation
         }
 
         return AgentAction.None;
+    }
+
+    private float[] CreateVisionBuffer()
+    {
+        return new float[_visionSensor.RayCount * 3];
     }
 }

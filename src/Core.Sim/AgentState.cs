@@ -7,10 +7,10 @@ public sealed class AgentState
     private float _thirst01;
     private float _secondsAtMaxThirst;
 
-    public AgentState(Vector2 position)
+    public AgentState(Vector2 position, float[]? visionBuffer = null)
     {
         Position = position;
-        LastVision = Array.Empty<float>();
+        LastVision = visionBuffer ?? Array.Empty<float>();
         _thirst01 = 0f;
         _secondsAtMaxThirst = 0f;
         IsAlive = true;

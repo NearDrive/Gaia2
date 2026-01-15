@@ -110,6 +110,8 @@ internal static class Program
         bool episodesSpecified = false;
         int generations = 20;
         int population = 64;
+        bool parallel = false;
+        int? maxDegree = null;
         RunMode mode = RunMode.Sim;
         string brain = "none";
         string resumePath = Path.Combine("artifacts", "checkpoint.json");
@@ -147,6 +149,12 @@ internal static class Program
                     break;
                 case "--resume":
                     resumePath = ParseStringValue(args, ref i, "--resume");
+                    break;
+                case "--parallel":
+                    parallel = ParseParallelValue(args, ref i);
+                    break;
+                case "--maxDegree":
+                    maxDegree = ParseIntValue(args, ref i, "--maxDegree");
                     break;
                 default:
                     throw new ArgumentException($"Unknown argument '{arg}'.");
@@ -208,7 +216,27 @@ internal static class Program
             throw new ArgumentException("Missing required --brain <none|neat> argument for episode mode.");
         }
 
-        return new Options(seed!.Value, ticks, agents, mode, brain, episodes, generations, population, resumePath);
+        int resolvedMaxDegree = parallel
+            ? maxDegree ?? Environment.ProcessorCount
+            : 0;
+
+        if (parallel && resolvedMaxDegree <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxDegree));
+        }
+
+        return new Options(
+            seed!.Value,
+            ticks,
+            agents,
+            mode,
+            brain,
+            episodes,
+            generations,
+            population,
+            resumePath,
+            parallel,
+            resolvedMaxDegree);
     }
 
     private static int ParseIntValue(string[] args, ref int index, string name)
@@ -248,6 +276,17 @@ internal static class Program
             "episode" => RunMode.Episode,
             "train" => RunMode.Train,
             _ => throw new ArgumentException($"Invalid mode '{value}'. Use 'sim', 'episode', or 'train'.")
+        };
+    }
+
+    private static bool ParseParallelValue(string[] args, ref int index)
+    {
+        int value = ParseIntValue(args, ref index, "--parallel");
+        return value switch
+        {
+            0 => false,
+            1 => true,
+            _ => throw new ArgumentException($"Invalid value for --parallel: '{value}'. Use 0 or 1.")
         };
     }
 
@@ -359,7 +398,9 @@ internal static class Program
                 baseSeed,
                 options.Episodes,
                 simConfig,
-                options.Ticks);
+                options.Ticks,
+                options.Parallel,
+                options.Parallel ? options.MaxDegree : null);
 
             Genome? bestGenome = result.BestGenome;
             if (bestGenome is not null && result.BestFitness > bestOverallFitness)
@@ -453,7 +494,9 @@ internal static class Program
         int Episodes,
         int Generations,
         int Population,
-        string ResumePath);
+        string ResumePath,
+        bool Parallel,
+        int MaxDegree);
 
     private static StreamWriter CreateTrainLogWriter(string logPath)
     {
