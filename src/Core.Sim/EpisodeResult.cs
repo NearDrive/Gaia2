@@ -19,4 +19,7 @@ public readonly record struct EpisodeResult(
     IReadOnlyList<int>? SnapshotTicksWritten = null)
 {
     public IReadOnlyList<WorldSnapshot> Snapshots { get; init; } = Array.Empty<WorldSnapshot>();
+    public bool SnapshotsEnabled { get; init; }
+    public int SnapshotEveryNTicks { get; init; }
+    public int SnapshotCount { get; init; }
 }

@@ -177,7 +177,10 @@ public sealed class EpisodeRunner
             totalChecksum,
             captureSnapshots ? snapshotTicksWritten : null)
         {
-            Snapshots = captureSnapshots ? snapshots : Array.Empty<WorldSnapshot>()
+            Snapshots = captureSnapshots ? snapshots : Array.Empty<WorldSnapshot>(),
+            SnapshotsEnabled = captureSnapshots,
+            SnapshotEveryNTicks = snapshotEveryNTicks,
+            SnapshotCount = snapshots.Count
         };
     }
 

@@ -1,3 +1,4 @@
+using System.Linq;
 using Core.Sim;
 using Xunit;
 
@@ -21,6 +22,10 @@ public class SnapshotTests
             2,
             captureSnapshots: true,
             snapshotEveryNTicks: snapshotEvery);
+        Assert.True(firstResult.SnapshotsEnabled);
+        Assert.Equal(snapshotEvery, firstResult.SnapshotEveryNTicks);
+        Assert.True(firstResult.SnapshotCount > 0);
+
         WorldSnapshot first = FindSnapshot(firstResult.Snapshots, snapshotTick);
         string firstJson = SnapshotJson.Serialize(first);
 
@@ -31,6 +36,10 @@ public class SnapshotTests
             2,
             captureSnapshots: true,
             snapshotEveryNTicks: snapshotEvery);
+        Assert.True(secondResult.SnapshotsEnabled);
+        Assert.Equal(snapshotEvery, secondResult.SnapshotEveryNTicks);
+        Assert.True(secondResult.SnapshotCount > 0);
+
         WorldSnapshot second = FindSnapshot(secondResult.Snapshots, snapshotTick);
         string secondJson = SnapshotJson.Serialize(second);
 
@@ -55,6 +64,10 @@ public class SnapshotTests
             3,
             captureSnapshots: true,
             snapshotEveryNTicks: snapshotEvery);
+
+        Assert.True(result.SnapshotsEnabled);
+        Assert.Equal(snapshotEvery, result.SnapshotEveryNTicks);
+        Assert.True(result.SnapshotCount > 0);
 
         WorldSnapshot snapshot = FindSnapshot(result.Snapshots, snapshotTick);
 
@@ -88,7 +101,9 @@ public class SnapshotTests
             }
         }
 
-        throw new InvalidOperationException($"Snapshot for tick {tick} was not found.");
+        string captured = string.Join(",", snapshots.Select(s => s.Header.Tick).Take(50));
+        throw new InvalidOperationException(
+            $"Snapshot for tick {tick} was not found. CapturedTicks=[{captured}] Count={snapshots.Count}");
     }
 
 }
