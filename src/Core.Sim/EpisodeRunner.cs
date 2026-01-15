@@ -21,7 +21,8 @@ public sealed class EpisodeRunner
         int agentCount = 1,
         bool captureSnapshots = false,
         int snapshotEveryNTicks = 0,
-        string? snapshotsOutDir = null)
+        string? snapshotsOutDir = null,
+        bool stopEarlyWhenAllAgentsDead = true)
     {
         if (brain is null)
         {
@@ -45,7 +46,15 @@ public sealed class EpisodeRunner
         };
 
         Simulation simulation = new(config, agentCount);
-        return RunEpisodeInternal(brain, seed, ticks, simulation, captureSnapshots, snapshotEveryNTicks, snapshotsOutDir);
+        return RunEpisodeInternal(
+            brain,
+            seed,
+            ticks,
+            simulation,
+            captureSnapshots,
+            snapshotEveryNTicks,
+            snapshotsOutDir,
+            stopEarlyWhenAllAgentsDead);
     }
 
     public EpisodeResult RunEpisode(
@@ -55,7 +64,8 @@ public sealed class EpisodeRunner
         IReadOnlyList<Vector2> initialAgentPositions,
         bool captureSnapshots = false,
         int snapshotEveryNTicks = 0,
-        string? snapshotsOutDir = null)
+        string? snapshotsOutDir = null,
+        bool stopEarlyWhenAllAgentsDead = true)
     {
         if (brain is null)
         {
@@ -84,7 +94,15 @@ public sealed class EpisodeRunner
         };
 
         Simulation simulation = new(config, initialAgentPositions);
-        return RunEpisodeInternal(brain, seed, ticks, simulation, captureSnapshots, snapshotEveryNTicks, snapshotsOutDir);
+        return RunEpisodeInternal(
+            brain,
+            seed,
+            ticks,
+            simulation,
+            captureSnapshots,
+            snapshotEveryNTicks,
+            snapshotsOutDir,
+            stopEarlyWhenAllAgentsDead);
     }
 
     private static EpisodeResult RunEpisodeInternal(
@@ -94,7 +112,8 @@ public sealed class EpisodeRunner
         Simulation simulation,
         bool captureSnapshots,
         int snapshotEveryNTicks,
-        string? snapshotsOutDir)
+        string? snapshotsOutDir,
+        bool stopEarlyWhenAllAgentsDead)
     {
         int ticksSurvived = 0;
         int successfulDrinks = 0;
@@ -127,7 +146,7 @@ public sealed class EpisodeRunner
                 snapshotTicksWritten.Add(tick);
             }
 
-            if (AreAllAgentsDead(simulation.Agents))
+            if (stopEarlyWhenAllAgentsDead && AreAllAgentsDead(simulation.Agents))
             {
                 break;
             }
