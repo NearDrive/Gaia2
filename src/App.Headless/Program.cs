@@ -29,6 +29,12 @@ internal static class Program
     {
         Options options = ParseArgs(args);
 
+        if (options.Snapshots && options.SnapshotEvery <= 0)
+        {
+            Console.Error.WriteLine("Missing required --snapshot-every <int> argument when --snapshots is enabled.");
+            return 1;
+        }
+
         if (options.Mode == RunMode.Compare)
         {
             RunCompare(options.ComparePathA, options.ComparePathB);
@@ -249,19 +255,9 @@ internal static class Program
             throw new ArgumentOutOfRangeException(nameof(episodes));
         }
 
-        if (snapshots && !snapshotEvery.HasValue)
-        {
-            throw new ArgumentException("Missing required --snapshot-every <int> argument when --snapshots is enabled.");
-        }
-
         if (snapshotEvery.HasValue && snapshotEvery.Value <= 0)
         {
             throw new ArgumentOutOfRangeException(nameof(snapshotEvery), "Snapshot interval must be > 0.");
-        }
-
-        if (snapshotEvery.HasValue && !snapshots)
-        {
-            throw new ArgumentException("Missing required --snapshots flag for snapshot capture.");
         }
 
         if (generations <= 0)
@@ -769,8 +765,8 @@ internal static class Program
         string ComparePathB,
         string GenomePath,
         string ScenariosPath,
-        bool Snapshots,
-        int SnapshotEvery);
+        bool Snapshots = false,
+        int SnapshotEvery = 0);
 
     internal readonly record struct ManifestComparisonResult(bool Equivalent, IReadOnlyList<string> Differences);
 

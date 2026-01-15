@@ -11,7 +11,7 @@ public class SnapshotTests
     {
         SimulationConfig config = CreateConfig();
         EpisodeRunner runner = new(config);
-        IBrain brain = new AlwaysDrinkBrain();
+        IBrain brain = new NoOpBrain();
         string snapshotDirectory = Path.Combine("artifacts", "snapshots");
         const int snapshotEvery = 50;
 
@@ -35,7 +35,7 @@ public class SnapshotTests
     {
         SimulationConfig config = CreateConfig();
         EpisodeRunner runner = new(config);
-        IBrain brain = new AlwaysDrinkBrain();
+        IBrain brain = new NoOpBrain();
         string snapshotDirectory = Path.Combine("artifacts", "snapshots");
         const int snapshotEvery = 30;
 
@@ -79,14 +79,4 @@ public class SnapshotTests
         }
     }
 
-    private sealed class AlwaysDrinkBrain : IBrain
-    {
-        public BrainOutput DecideAction(BrainInput input)
-        {
-            return new BrainOutput
-            {
-                ActionDrinkScore = 1f
-            };
-        }
-    }
 }
