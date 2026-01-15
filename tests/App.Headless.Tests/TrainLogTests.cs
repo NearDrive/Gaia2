@@ -101,7 +101,7 @@ public class TrainLogTests
         Assert.Equal(sequential.BestFitness, parallel.BestFitness);
         Assert.Equal(sequential.MeanFitness, parallel.MeanFitness);
         Assert.Equal(sequential.WorstFitness, parallel.WorstFitness);
-        Assert.Equal(sequential.BestIndex, parallel.BestIndex);
+        Assert.Equal(sequential.BestGenomeIndex, parallel.BestGenomeIndex);
         Assert.Equal(sequential.Fitnesses, parallel.Fitnesses);
     }
 
