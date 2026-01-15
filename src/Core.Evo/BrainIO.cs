@@ -7,7 +7,7 @@ public readonly record struct BrainInput(
 
 public readonly record struct BrainOutput
 {
-    public float MoveX;
-    public float MoveY;
-    public float ActionDrinkScore;
+    public float MoveX { get; init; }
+    public float MoveY { get; init; }
+    public float ActionDrinkScore { get; init; }
 }
