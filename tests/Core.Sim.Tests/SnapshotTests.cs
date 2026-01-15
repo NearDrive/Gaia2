@@ -1,4 +1,3 @@
-using System.Globalization;
 using Core.Sim;
 using Xunit;
 
@@ -14,43 +13,30 @@ public class SnapshotTests
         IBrain brain = new NoOpBrain();
         const int snapshotEvery = 10;
         const int snapshotTick = 50;
-        string outDir = CreateSnapshotDirectory();
 
-        try
-        {
-            runner.RunEpisode(
-                brain,
-                12345,
-                60,
-                2,
-                captureSnapshots: true,
-                snapshotEveryNTicks: snapshotEvery,
-                snapshotsOutDir: outDir);
-            string firstJson = ReadSnapshotJson(outDir, snapshotTick);
-            WorldSnapshot first = SnapshotJson.Deserialize(firstJson);
+        EpisodeResult firstResult = runner.RunEpisode(
+            brain,
+            12345,
+            60,
+            2,
+            captureSnapshots: true,
+            snapshotEveryNTicks: snapshotEvery);
+        WorldSnapshot first = FindSnapshot(firstResult.Snapshots, snapshotTick);
+        string firstJson = SnapshotJson.Serialize(first);
 
-            Directory.Delete(outDir, true);
-            Directory.CreateDirectory(outDir);
+        EpisodeResult secondResult = runner.RunEpisode(
+            brain,
+            12345,
+            60,
+            2,
+            captureSnapshots: true,
+            snapshotEveryNTicks: snapshotEvery);
+        WorldSnapshot second = FindSnapshot(secondResult.Snapshots, snapshotTick);
+        string secondJson = SnapshotJson.Serialize(second);
 
-            runner.RunEpisode(
-                brain,
-                12345,
-                60,
-                2,
-                captureSnapshots: true,
-                snapshotEveryNTicks: snapshotEvery,
-                snapshotsOutDir: outDir);
-            string secondJson = ReadSnapshotJson(outDir, snapshotTick);
-            WorldSnapshot second = SnapshotJson.Deserialize(secondJson);
-
-            Assert.Equal(first.Header.WorldChecksum, second.Header.WorldChecksum);
-            Assert.Equal(first.Header.AgentCount, second.Header.AgentCount);
-            Assert.Equal(firstJson, secondJson);
-        }
-        finally
-        {
-            CleanupSnapshots(outDir);
-        }
+        Assert.Equal(first.Header.WorldChecksum, second.Header.WorldChecksum);
+        Assert.Equal(first.Header.AgentCount, second.Header.AgentCount);
+        Assert.Equal(firstJson, secondJson);
     }
 
     [Fact]
@@ -61,28 +47,18 @@ public class SnapshotTests
         IBrain brain = new NoOpBrain();
         const int snapshotEvery = 10;
         const int snapshotTick = 30;
-        string outDir = CreateSnapshotDirectory();
 
-        try
-        {
-            runner.RunEpisode(
-                brain,
-                777,
-                60,
-                3,
-                captureSnapshots: true,
-                snapshotEveryNTicks: snapshotEvery,
-                snapshotsOutDir: outDir);
+        EpisodeResult result = runner.RunEpisode(
+            brain,
+            777,
+            60,
+            3,
+            captureSnapshots: true,
+            snapshotEveryNTicks: snapshotEvery);
 
-            string json = ReadSnapshotJson(outDir, snapshotTick);
-            WorldSnapshot snapshot = SnapshotJson.Deserialize(json);
+        WorldSnapshot snapshot = FindSnapshot(result.Snapshots, snapshotTick);
 
-            Assert.Equal(snapshot.Header.AgentCount, snapshot.Agents.Count);
-        }
-        finally
-        {
-            CleanupSnapshots(outDir);
-        }
+        Assert.Equal(snapshot.Header.AgentCount, snapshot.Agents.Count);
     }
 
     private static SimulationConfig CreateConfig(float thirstRate = 0.05f, float deathGrace = 2f)
@@ -102,25 +78,17 @@ public class SnapshotTests
             deathGrace);
     }
 
-    private static string ReadSnapshotJson(string directory, int tick)
+    private static WorldSnapshot FindSnapshot(IReadOnlyList<WorldSnapshot> snapshots, int tick)
     {
-        string path = Path.Combine(directory, $"snap_{tick.ToString(CultureInfo.InvariantCulture)}.json");
-        return File.ReadAllText(path);
-    }
-
-    private static string CreateSnapshotDirectory()
-    {
-        string directory = Path.Combine(Path.GetTempPath(), "gaia2_snapshots", Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(directory);
-        return directory;
-    }
-
-    private static void CleanupSnapshots(string directory)
-    {
-        if (Directory.Exists(directory))
+        foreach (WorldSnapshot snapshot in snapshots)
         {
-            Directory.Delete(directory, true);
+            if (snapshot.Header.Tick == tick)
+            {
+                return snapshot;
+            }
         }
+
+        throw new InvalidOperationException($"Snapshot for tick {tick} was not found.");
     }
 
 }

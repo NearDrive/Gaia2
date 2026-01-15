@@ -175,7 +175,10 @@ public sealed class EpisodeRunner
             drinkableExploreScore,
             fitness,
             totalChecksum,
-            captureSnapshots ? snapshotTicksWritten : null);
+            captureSnapshots ? snapshotTicksWritten : null)
+        {
+            Snapshots = captureSnapshots ? snapshots : Array.Empty<WorldSnapshot>()
+        };
     }
 
     private static bool AreAllAgentsDead(IReadOnlyList<AgentState> agents)
