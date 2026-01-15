@@ -5,12 +5,19 @@ namespace Core.Sim.Tests;
 
 public class EpisodeRunnerTests
 {
+    private readonly ITestOutputHelper _output;
+
+    public EpisodeRunnerTests(ITestOutputHelper output)
+    {
+        _output = output;
+    }
+
     [Fact]
     public void Episode_SameSeed_SameFitness()
     {
         SimulationConfig config = CreateConfig();
         EpisodeRunner runner = new(config);
-        IBrain brain = new DrinkWhenPossibleBrain();
+        IBrain brain = new AlwaysDrinkBrain();
 
         EpisodeResult first = runner.RunEpisode(brain, 12345, 250, 1);
         EpisodeResult second = runner.RunEpisode(brain, 12345, 250, 1);
@@ -23,7 +30,7 @@ public class EpisodeRunnerTests
     {
         SimulationConfig config = CreateConfig();
         EpisodeRunner runner = new(config);
-        IBrain brain = new DrinkWhenPossibleBrain();
+        IBrain brain = new AlwaysDrinkBrain();
 
         EpisodeResult first = runner.RunEpisode(brain, 111, 250, 1);
         EpisodeResult second = runner.RunEpisode(brain, 222, 250, 1);
@@ -37,10 +44,13 @@ public class EpisodeRunnerTests
         SimulationConfig config = CreateConfig(thirstRate: 1f, deathGrace: 2f);
         EpisodeRunner runner = new(config);
 
-        EpisodeResult noDrink = runner.RunEpisode(new NoDrinkBrain(), 42, 50, 1);
-        EpisodeResult drink = runner.RunEpisode(new DrinkWhenPossibleBrain(), 42, 50, 1);
+        EpisodeResult rBad = runner.RunEpisode(new NoDrinkBrain(), 42, 50, 1);
+        EpisodeResult rGood = runner.RunEpisode(new AlwaysDrinkBrain(), 42, 50, 1);
 
-        Assert.True(drink.Fitness > noDrink.Fitness);
+        _output.WriteLine($"Bad: Ticks={rBad.TicksSurvived} Drinks={rBad.SuccessfulDrinks} Thirst={rBad.AvgThirst01:0.000000} Fitness={rBad.Fitness:0.000}");
+        _output.WriteLine($"Good: Ticks={rGood.TicksSurvived} Drinks={rGood.SuccessfulDrinks} Thirst={rGood.AvgThirst01:0.000000} Fitness={rGood.Fitness:0.000}");
+
+        Assert.True(rGood.Fitness > rBad.Fitness);
     }
 
     [Fact]
@@ -76,7 +86,7 @@ public class EpisodeRunnerTests
         }
     }
 
-    private sealed class DrinkWhenPossibleBrain : IBrain
+    private sealed class AlwaysDrinkBrain : IBrain
     {
         public AgentAction DecideAction(AgentState agent, Simulation simulation)
         {
@@ -85,9 +95,7 @@ public class EpisodeRunnerTests
                 return AgentAction.None;
             }
 
-            return Simulation.CanDrink(simulation.World, agent.Position)
-                ? AgentAction.Drink
-                : AgentAction.None;
+            return AgentAction.Drink;
         }
     }
 }
