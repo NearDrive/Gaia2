@@ -42,6 +42,40 @@ public sealed class Simulation
         }
     }
 
+    public Simulation(SimulationConfig config, IReadOnlyList<Vector2> initialPositions)
+    {
+        if (initialPositions is null)
+        {
+            throw new ArgumentNullException(nameof(initialPositions));
+        }
+
+        if (initialPositions.Count <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(initialPositions));
+        }
+
+        if (config.WorldWidth <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(config.WorldWidth));
+        }
+
+        if (config.WorldHeight <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(config.WorldHeight));
+        }
+
+        Config = config;
+        _rng = new SimRng(config.Seed);
+        _agents = new List<AgentState>(initialPositions.Count);
+        World = new GridWorld(config.WorldWidth, config.WorldHeight, config.Seed);
+        _visionSensor = new VisionSensor(config.AgentVisionRays, config.AgentVisionRange, config.AgentFov);
+
+        foreach (Vector2 position in initialPositions)
+        {
+            _agents.Add(new AgentState(position));
+        }
+    }
+
     public int Tick { get; private set; }
 
     public SimulationConfig Config { get; }
@@ -75,6 +109,52 @@ public sealed class Simulation
         }
 
         Tick += 1;
+    }
+
+    public int Step(IBrain brain)
+    {
+        if (brain is null)
+        {
+            throw new ArgumentNullException(nameof(brain));
+        }
+
+        int successfulDrinks = 0;
+
+        for (int i = 0; i < _agents.Count; i += 1)
+        {
+            AgentState agent = _agents[i];
+            agent.UpdateThirst(Config.Dt, Config.ThirstRatePerSecond, Config.DeathGraceSeconds);
+
+            if (!agent.IsAlive)
+            {
+                continue;
+            }
+
+            float thirstBeforeAction = agent.Thirst01;
+            AgentAction action = brain.DecideAction(agent, this);
+            ApplyAction(agent, action);
+
+            if (agent.Thirst01 < thirstBeforeAction)
+            {
+                successfulDrinks += 1;
+            }
+
+            if (!agent.IsAlive)
+            {
+                continue;
+            }
+
+            Vector2 delta = new Vector2(
+                _rng.NextFloat(-1f, 1f),
+                _rng.NextFloat(-1f, 1f));
+            delta *= Config.Dt;
+            agent.TryApplyDelta(World, delta);
+            float[] vision = _visionSensor.Sense(World, agent.Position, 0f);
+            agent.UpdateVision(vision);
+        }
+
+        Tick += 1;
+        return successfulDrinks;
     }
 
     public void Run(int ticks)

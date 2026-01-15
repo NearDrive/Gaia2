@@ -61,6 +61,16 @@ public class WorldAndVisionTests
 
     private static (Vector2 Start, Vector2 Delta) FindBlockedMove(GridWorld world)
     {
+#pragma warning disable CA2014
+        (int dx, int dy)[] neighbors =
+        {
+            (-1, 0),
+            (1, 0),
+            (0, -1),
+            (0, 1)
+        };
+#pragma warning restore CA2014
+
         for (int y = 0; y < world.Height; y += 1)
         {
             for (int x = 0; x < world.Width; x += 1)
@@ -69,14 +79,6 @@ public class WorldAndVisionTests
                 {
                     continue;
                 }
-
-                ReadOnlySpan<(int dx, int dy)> neighbors = stackalloc (int dx, int dy)[]
-                {
-                    (-1, 0),
-                    (1, 0),
-                    (0, -1),
-                    (0, 1)
-                };
 
                 foreach ((int dx, int dy) in neighbors)
                 {
