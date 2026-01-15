@@ -62,10 +62,10 @@ public sealed class EpisodeRunner
         double quantizedAvgThirst = Math.Round(avgThirst, 6, MidpointRounding.AwayFromZero);
         float avgThirst01 = (float)quantizedAvgThirst;
 
-        double survivalScore = ticksSurvived / (double)ticks;
         double thirstScore = 1.0 - avgThirst01;
-        double drinkScore = Math.Clamp(successfulDrinks / 10.0, 0.0, 1.0);
-        double fitness = (100.0 * survivalScore) + (20.0 * thirstScore) + (5.0 * drinkScore);
+        double fitness = (ticksSurvived * 1000.0)
+            + (thirstScore * 20.0)
+            + (successfulDrinks * 5.0);
 
         ulong worldChecksum = simulation.World.ComputeChecksum();
         ulong agentsChecksum = SimulationChecksum.Compute(simulation.Agents, simulation.Tick);
