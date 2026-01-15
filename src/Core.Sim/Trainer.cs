@@ -14,7 +14,7 @@ public sealed class Trainer
         int baseSeed,
         int episodesPerGenome,
         SimulationConfig simConfig,
-        int ticksPerEpisode,
+        CurriculumSchedule curriculum,
         bool useParallel = false,
         int? maxDegreeOfParallelism = null)
     {
@@ -28,9 +28,9 @@ public sealed class Trainer
             throw new ArgumentOutOfRangeException(nameof(episodesPerGenome));
         }
 
-        if (ticksPerEpisode <= 0)
+        if (curriculum is null)
         {
-            throw new ArgumentOutOfRangeException(nameof(ticksPerEpisode));
+            throw new ArgumentNullException(nameof(curriculum));
         }
 
         if (useParallel && maxDegreeOfParallelism.HasValue && maxDegreeOfParallelism.Value <= 0)
@@ -38,10 +38,22 @@ public sealed class Trainer
             throw new ArgumentOutOfRangeException(nameof(maxDegreeOfParallelism));
         }
 
-        int inputCount = (simConfig.AgentVisionRays * 3) + 2;
+        int generation = pop.Generation;
+        CurriculumPhase phase = curriculum.GetPhase(generation);
+        SimulationConfig generationConfig = simConfig with
+        {
+            WorldWidth = phase.WorldSize,
+            WorldHeight = phase.WorldSize,
+            ThirstRatePerSecond = phase.ThirstRatePerSecond,
+            WaterProximityBias01 = phase.WaterProximityBias01,
+            ObstacleDensity01 = phase.ObstacleDensity01,
+            TicksPerEpisode = phase.TicksPerEpisode
+        };
+
+        int inputCount = (generationConfig.AgentVisionRays * 3) + 2;
         int outputCount = 3;
 
-        EpisodeRunner runner = new(simConfig);
+        EpisodeRunner runner = new(generationConfig);
 
         int genomeCount = pop.Genomes.Count;
         double[] fitnesses = new double[genomeCount];
@@ -70,7 +82,7 @@ public sealed class Trainer
             for (int episode = 0; episode < episodesPerGenome; episode += 1)
             {
                 int seed = baseSeed + (i * 1000) + episode;
-                EpisodeResult result = runner.RunEpisode(brain, seed, ticksPerEpisode, 1);
+                EpisodeResult result = runner.RunEpisode(brain, seed, phase.TicksPerEpisode, 1);
                 fitnessSum += result.Fitness;
                 ticksSurvivedSum += result.TicksSurvived;
                 successfulDrinksSum += result.SuccessfulDrinks;
@@ -172,7 +184,7 @@ public sealed class Trainer
         double meanVisitedCells = totalVisitedCells / genomeCount;
 
         return new GenerationResult(
-            pop.Generation,
+            generation,
             bestFitness,
             meanFitness,
             worstFitness,
@@ -188,6 +200,10 @@ public sealed class Trainer
             bestDistanceTraveled,
             bestVisitedCells,
             bestDrinkableCellsVisited,
-            meanVisitedCells);
+            meanVisitedCells,
+            phase.WorldSize,
+            phase.ObstacleDensity01,
+            phase.WaterProximityBias01,
+            phase.TicksPerEpisode);
     }
 }

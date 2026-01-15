@@ -19,7 +19,8 @@ internal static class Program
     private const float DefaultAgentMaxSpeed = 1.5f;
     private const float DefaultMoveDeadzone = 0.05f;
     internal const string TrainLogHeader =
-        "run_id,generation,population,episodes_per_genome,ticks_per_episode," +
+        "run_id,generation,population,episodes_per_genome,world_size,obstacle_density,water_proximity_bias," +
+        "ticks_per_episode," +
         "best_fitness,mean_fitness,worst_fitness,best_ticks_survived,best_successful_drinks," +
         "best_avg_thirst,best_distance_traveled,best_visited_cells,best_drinkable_cells_visited," +
         "mean_visited_cells,best_nodes,best_connections";
@@ -366,6 +367,30 @@ internal static class Program
         };
     }
 
+    private static CurriculumSchedule CreateDefaultCurriculum(Options options, SimulationConfig simConfig)
+    {
+        int baseWorldSize = Math.Max(simConfig.WorldWidth, simConfig.WorldHeight);
+        int startWorldSize = Math.Max(8, baseWorldSize - 8);
+        int endWorldSize = baseWorldSize + 8;
+
+        CurriculumPhase start = new(
+            WaterProximityBias01: 1f,
+            ObstacleDensity01: 0.1f,
+            WorldSize: startWorldSize,
+            TicksPerEpisode: options.Ticks,
+            ThirstRatePerSecond: simConfig.ThirstRatePerSecond);
+
+        CurriculumPhase end = new(
+            WaterProximityBias01: 0f,
+            ObstacleDensity01: 0.4f,
+            WorldSize: endWorldSize,
+            TicksPerEpisode: options.Ticks,
+            ThirstRatePerSecond: simConfig.ThirstRatePerSecond * 1.2f);
+
+        int totalGenerations = Math.Max(1, options.Generations);
+        return new CurriculumSchedule(totalGenerations, start, end);
+    }
+
     internal static void RunTraining(Options options, SimulationConfig simConfig)
     {
         Directory.CreateDirectory("artifacts");
@@ -411,6 +436,7 @@ internal static class Program
         Evolver evolver = new(evoConfig);
         evolver.RestoreStateFromPopulation(population);
 
+        CurriculumSchedule curriculum = CreateDefaultCurriculum(options, simConfig);
         Trainer trainer = new();
         Genome? bestOverall = null;
         GenomeFitnessScore? bestOverallScore = null;
@@ -430,7 +456,7 @@ internal static class Program
                 baseSeed,
                 options.Episodes,
                 simConfig,
-                options.Ticks,
+                curriculum,
                 options.Parallel,
                 options.Parallel ? options.MaxDegree : null);
 
@@ -469,7 +495,7 @@ internal static class Program
                 result,
                 population.Genomes.Count,
                 options.Episodes,
-                options.Ticks);
+                result.TicksPerEpisode);
 
             if (bestGenome is not null)
             {
@@ -498,7 +524,7 @@ internal static class Program
 
         if (finalResult is not null)
         {
-            WriteRunManifest(options, evoConfig, logPath, bestOverallPath, finalResult);
+            WriteRunManifest(options, evoConfig, logPath, bestOverallPath, finalResult, curriculum);
         }
     }
 
@@ -553,10 +579,13 @@ internal static class Program
         EvolutionConfig evoConfig,
         string logPath,
         string? bestGenomePath,
-        GenerationResult finalResult)
+        GenerationResult finalResult,
+        CurriculumSchedule curriculum)
     {
+        CurriculumPhase startPhase = curriculum.GetPhase(0);
+        CurriculumPhase endPhase = curriculum.GetPhase(curriculum.TotalGenerations - 1);
         RunManifest manifest = new(
-            SchemaVersion: 1,
+            SchemaVersion: 2,
             CreatedUtc: DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture),
             Seed: options.Seed,
             Generations: options.Generations,
@@ -574,6 +603,20 @@ internal static class Program
                 evoConfig.WeightResetRate,
                 evoConfig.MaxNodes,
                 evoConfig.MaxConnections),
+            CurriculumSchedule: new CurriculumScheduleManifest(
+                curriculum.TotalGenerations,
+                Start: new CurriculumPhaseManifest(
+                    startPhase.WaterProximityBias01,
+                    startPhase.ObstacleDensity01,
+                    startPhase.WorldSize,
+                    startPhase.TicksPerEpisode,
+                    startPhase.ThirstRatePerSecond),
+                End: new CurriculumPhaseManifest(
+                    endPhase.WaterProximityBias01,
+                    endPhase.ObstacleDensity01,
+                    endPhase.WorldSize,
+                    endPhase.TicksPerEpisode,
+                    endPhase.ThirstRatePerSecond)),
             BestGenomePath: bestGenomePath ?? string.Empty,
             CheckpointPath: options.ResumePath,
             TrainLogPath: logPath,
@@ -649,6 +692,9 @@ internal static class Program
             result.Generation.ToString(CultureInfo.InvariantCulture),
             population.ToString(CultureInfo.InvariantCulture),
             episodesPerGenome.ToString(CultureInfo.InvariantCulture),
+            result.WorldSize.ToString(CultureInfo.InvariantCulture),
+            result.ObstacleDensity01.ToString("0.000", CultureInfo.InvariantCulture),
+            result.WaterProximityBias01.ToString("0.000", CultureInfo.InvariantCulture),
             ticksPerEpisode.ToString(CultureInfo.InvariantCulture),
             result.BestFitness.ToString("0.000", CultureInfo.InvariantCulture),
             result.MeanFitness.ToString("0.000", CultureInfo.InvariantCulture),
