@@ -49,6 +49,12 @@ internal static class Program
             DefaultAgentMaxSpeed,
             DefaultMoveDeadzone);
 
+        if (options.Mode == RunMode.ReplayVerify && string.IsNullOrWhiteSpace(options.InPath))
+        {
+            Console.Error.WriteLine("Missing --in <path> for replay-verify.");
+            return 2;
+        }
+
         if (options.Mode == RunMode.Benchmark)
         {
             RunBenchmark(options, config);
@@ -242,10 +248,6 @@ internal static class Program
             throw new ArgumentException("Missing required --a <manifestA> and --b <manifestB> arguments for compare mode.");
         }
 
-        if (mode == RunMode.ReplayVerify && string.IsNullOrWhiteSpace(inPath))
-        {
-            throw new ArgumentException("Missing required --in <path> argument for replay-verify mode.");
-        }
 
         if (ticks <= 0)
         {
@@ -840,7 +842,7 @@ internal static class Program
         string ComparePathB,
         string GenomePath,
         string ScenariosPath,
-        string InPath,
+        string InPath = "",
         string OutPath = "");
 
     private static string BuildBrainInfo(string genomePath)
