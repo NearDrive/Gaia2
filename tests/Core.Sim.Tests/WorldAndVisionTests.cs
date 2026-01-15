@@ -61,6 +61,7 @@ public class WorldAndVisionTests
 
     private static (Vector2 Start, Vector2 Delta) FindBlockedMove(GridWorld world)
     {
+#pragma warning disable CA2014
         (int dx, int dy)[] neighbors =
         {
             (-1, 0),
@@ -68,6 +69,7 @@ public class WorldAndVisionTests
             (0, -1),
             (0, 1)
         };
+#pragma warning restore CA2014
 
         for (int y = 0; y < world.Height; y += 1)
         {
