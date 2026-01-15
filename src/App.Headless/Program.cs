@@ -309,8 +309,8 @@ internal static class Program
             comparePathB,
             genomePath,
             scenariosPath,
-            outPath,
-            inPath);
+            inPath,
+            outPath);
     }
 
     private static int ParseIntValue(string[] args, ref int index, string name)
@@ -777,8 +777,9 @@ internal static class Program
             brainInfo: brainInfo);
 
         Replay replay = runner.LastReplay ?? throw new InvalidOperationException("Replay capture failed.");
-        string defaultPath = Path.Combine("artifacts", "replays", $"replay_seed{options.Seed}.json");
-        string outputPath = string.IsNullOrWhiteSpace(options.OutPath) ? defaultPath : options.OutPath;
+        string outputPath = string.IsNullOrWhiteSpace(options.OutPath)
+            ? Path.Combine("artifacts", "replays", $"replay_seed{options.Seed}.json")
+            : options.OutPath;
         string? outputDirectory = Path.GetDirectoryName(outputPath);
         if (!string.IsNullOrWhiteSpace(outputDirectory))
         {
@@ -839,8 +840,8 @@ internal static class Program
         string ComparePathB,
         string GenomePath,
         string ScenariosPath,
-        string OutPath,
-        string InPath);
+        string InPath,
+        string OutPath = "");
 
     private static string BuildBrainInfo(string genomePath)
     {
