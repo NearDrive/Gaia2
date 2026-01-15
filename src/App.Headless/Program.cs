@@ -16,10 +16,12 @@ internal static class Program
     private const int DefaultVisionRays = 8;
     private const float DefaultVisionRange = 10f;
     private const float DefaultVisionFov = MathF.PI / 2f;
+    private const float DefaultAgentMaxSpeed = 1.5f;
+    private const float DefaultMoveDeadzone = 0.05f;
     internal const string TrainLogHeader =
         "run_id,generation,population,episodes_per_genome,ticks_per_episode," +
         "best_fitness,mean_fitness,worst_fitness,best_ticks_survived,best_successful_drinks," +
-        "best_avg_thirst,best_nodes,best_connections";
+        "best_avg_thirst,best_distance_traveled,best_nodes,best_connections";
 
     public static int Main(string[] args)
     {
@@ -39,7 +41,9 @@ internal static class Program
             DefaultWorldHeight,
             DefaultVisionRays,
             DefaultVisionRange,
-            DefaultVisionFov);
+            DefaultVisionFov,
+            DefaultAgentMaxSpeed,
+            DefaultMoveDeadzone);
 
         if (options.Mode == RunMode.Sim)
         {
@@ -390,8 +394,8 @@ internal static class Program
                 maxConnections: 256);
 
             Evolver freshEvolver = new(evoConfig);
-            int inputCount = (simConfig.AgentVisionRays * 3) + 1;
-            int outputCount = 1;
+            int inputCount = (simConfig.AgentVisionRays * 3) + 2;
+            int outputCount = 3;
             population = freshEvolver.CreateInitialPopulation(
                 options.Seed,
                 options.Population,
@@ -649,6 +653,7 @@ internal static class Program
             result.BestTicksSurvived.ToString(CultureInfo.InvariantCulture),
             result.BestSuccessfulDrinks.ToString(CultureInfo.InvariantCulture),
             quantizedAvgThirst.ToString("0.000", CultureInfo.InvariantCulture),
+            result.BestDistanceTraveled.ToString("0.000", CultureInfo.InvariantCulture),
             result.BestGenomeNodeCount.ToString(CultureInfo.InvariantCulture),
             result.BestGenomeConnectionCount.ToString(CultureInfo.InvariantCulture));
 
@@ -658,27 +663,22 @@ internal static class Program
 
     private sealed class NoneBrain : IBrain
     {
-        public AgentAction DecideAction(AgentState agent, Simulation simulation)
+        public BrainOutput DecideAction(BrainInput input)
         {
-            return AgentAction.None;
+            return new BrainOutput();
         }
     }
 
     private sealed class HeuristicBrain : IBrain
     {
-        public AgentAction DecideAction(AgentState agent, Simulation simulation)
+        public BrainOutput DecideAction(BrainInput input)
         {
-            if (!agent.IsAlive)
+            float drinkScore = input.Thirst01 > 0.6f ? 1f : 0f;
+            return new BrainOutput
             {
-                return AgentAction.None;
-            }
-
-            if (agent.Thirst01 > 0.6f && Simulation.CanDrink(simulation.World, agent.Position))
-            {
-                return AgentAction.Drink;
-            }
-
-            return AgentAction.None;
+                MoveX = 0.5f,
+                ActionDrinkScore = drinkScore
+            };
         }
     }
 

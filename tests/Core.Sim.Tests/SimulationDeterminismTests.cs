@@ -57,6 +57,8 @@ public class SimulationDeterminismTests
             8,
             10f,
             MathF.PI / 2f,
+            1.5f,
+            0.05f,
             0.05f,
             2f);
         Simulation simulation = new(config, agents);

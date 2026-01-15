@@ -38,8 +38,8 @@ public sealed class Trainer
             throw new ArgumentOutOfRangeException(nameof(maxDegreeOfParallelism));
         }
 
-        int inputCount = (simConfig.AgentVisionRays * 3) + 1;
-        int outputCount = 1;
+        int inputCount = (simConfig.AgentVisionRays * 3) + 2;
+        int outputCount = 3;
 
         EpisodeRunner runner = new(simConfig);
 
@@ -48,6 +48,7 @@ public sealed class Trainer
         double[] rawFitnesses = new double[genomeCount];
         double[] avgTicksSurvived = new double[genomeCount];
         double[] avgSuccessfulDrinks = new double[genomeCount];
+        double[] avgDistanceTraveled = new double[genomeCount];
         float[] avgThirst01 = new float[genomeCount];
         int[] nodeCounts = new int[genomeCount];
         int[] connectionCounts = new int[genomeCount];
@@ -60,6 +61,7 @@ public sealed class Trainer
             double ticksSurvivedSum = 0.0;
             double successfulDrinksSum = 0.0;
             double avgThirstSum = 0.0;
+            double distanceSum = 0.0;
 
             for (int episode = 0; episode < episodesPerGenome; episode += 1)
             {
@@ -69,6 +71,7 @@ public sealed class Trainer
                 ticksSurvivedSum += result.TicksSurvived;
                 successfulDrinksSum += result.SuccessfulDrinks;
                 avgThirstSum += result.AvgThirst01;
+                distanceSum += result.DistanceTraveled;
             }
 
             double rawFitness = fitnessSum / episodesPerGenome;
@@ -79,6 +82,7 @@ public sealed class Trainer
             rawFitnesses[i] = rawFitness;
             avgTicksSurvived[i] = ticksSurvivedSum / episodesPerGenome;
             avgSuccessfulDrinks[i] = successfulDrinksSum / episodesPerGenome;
+            avgDistanceTraveled[i] = distanceSum / episodesPerGenome;
             avgThirst01[i] = (float)(avgThirstSum / episodesPerGenome);
             nodeCounts[i] = genome.NodeCount;
             connectionCounts[i] = genome.ConnectionCount;
@@ -107,6 +111,7 @@ public sealed class Trainer
         int bestTicksSurvived = 0;
         int bestSuccessfulDrinks = 0;
         float bestAvgThirst = 0f;
+        double bestDistanceTraveled = 0.0;
         GenomeFitnessScore? bestScore = null;
 
         for (int i = 0; i < genomeCount; i += 1)
@@ -136,6 +141,7 @@ public sealed class Trainer
                     avgSuccessfulDrinks[i],
                     MidpointRounding.AwayFromZero);
                 bestAvgThirst = avgThirst01[i];
+                bestDistanceTraveled = avgDistanceTraveled[i];
             }
 
             if (adjustedFitness < worstFitness)
@@ -159,6 +165,7 @@ public sealed class Trainer
             bestGenomeConnectionCount,
             bestTicksSurvived,
             bestSuccessfulDrinks,
-            bestAvgThirst);
+            bestAvgThirst,
+            bestDistanceTraveled);
     }
 }

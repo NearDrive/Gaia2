@@ -1,4 +1,5 @@
 using System.Numerics;
+using Core.Evo;
 using Core.Sim;
 using Xunit;
 using Xunit.Abstractions;
@@ -77,6 +78,8 @@ public class EpisodeRunnerTests
             4,
             4f,
             MathF.PI / 2f,
+            1.5f,
+            0.05f,
             thirstRate,
             deathGrace);
     }
@@ -100,22 +103,20 @@ public class EpisodeRunnerTests
 
     private sealed class NoDrinkBrain : IBrain
     {
-        public AgentAction DecideAction(AgentState agent, Simulation simulation)
+        public BrainOutput DecideAction(BrainInput input)
         {
-            return AgentAction.None;
+            return new BrainOutput();
         }
     }
 
     private sealed class AlwaysDrinkBrain : IBrain
     {
-        public AgentAction DecideAction(AgentState agent, Simulation simulation)
+        public BrainOutput DecideAction(BrainInput input)
         {
-            if (!agent.IsAlive)
+            return new BrainOutput
             {
-                return AgentAction.None;
-            }
-
-            return AgentAction.Drink;
+                ActionDrinkScore = 1f
+            };
         }
     }
 }
