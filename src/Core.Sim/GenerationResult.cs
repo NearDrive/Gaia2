@@ -11,6 +11,7 @@ public sealed class GenerationResult
         double worstFitness,
         int bestGenomeIndex,
         IReadOnlyList<double> fitnesses,
+        IReadOnlyList<double> rawFitnesses,
         Genome? bestGenome,
         int bestGenomeNodeCount,
         int bestGenomeConnectionCount,
@@ -24,6 +25,7 @@ public sealed class GenerationResult
         WorstFitness = worstFitness;
         BestGenomeIndex = bestGenomeIndex;
         Fitnesses = fitnesses ?? throw new ArgumentNullException(nameof(fitnesses));
+        RawFitnesses = rawFitnesses ?? throw new ArgumentNullException(nameof(rawFitnesses));
         BestGenome = bestGenome;
         BestGenomeNodeCount = bestGenomeNodeCount;
         BestGenomeConnectionCount = bestGenomeConnectionCount;
@@ -43,6 +45,8 @@ public sealed class GenerationResult
     public int BestGenomeIndex { get; }
 
     public IReadOnlyList<double> Fitnesses { get; }
+
+    public IReadOnlyList<double> RawFitnesses { get; }
 
     public Genome? BestGenome { get; }
 

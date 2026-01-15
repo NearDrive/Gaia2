@@ -25,6 +25,12 @@ internal static class Program
     {
         Options options = ParseArgs(args);
 
+        if (options.Mode == RunMode.Compare)
+        {
+            RunCompare(options.ComparePathA, options.ComparePathB);
+            return 0;
+        }
+
         SimulationConfig config = new(
             options.Seed,
             DefaultDt,
@@ -115,6 +121,8 @@ internal static class Program
         RunMode mode = RunMode.Sim;
         string brain = "none";
         string resumePath = Path.Combine("artifacts", "checkpoint.json");
+        string comparePathA = string.Empty;
+        string comparePathB = string.Empty;
 
         for (int i = 0; i < args.Length; i += 1)
         {
@@ -156,12 +164,18 @@ internal static class Program
                 case "--maxDegree":
                     maxDegree = ParseIntValue(args, ref i, "--maxDegree");
                     break;
+                case "--a":
+                    comparePathA = ParseStringValue(args, ref i, "--a");
+                    break;
+                case "--b":
+                    comparePathB = ParseStringValue(args, ref i, "--b");
+                    break;
                 default:
                     throw new ArgumentException($"Unknown argument '{arg}'.");
             }
         }
 
-        if (!seed.HasValue && mode != RunMode.Train)
+        if (!seed.HasValue && mode != RunMode.Train && mode != RunMode.Compare)
         {
             throw new ArgumentException("Missing required --seed <int> argument.");
         }
@@ -179,6 +193,11 @@ internal static class Program
         if (mode == RunMode.Train && !episodesSpecified)
         {
             episodes = 3;
+        }
+
+        if (mode == RunMode.Compare && (string.IsNullOrWhiteSpace(comparePathA) || string.IsNullOrWhiteSpace(comparePathB)))
+        {
+            throw new ArgumentException("Missing required --a <manifestA> and --b <manifestB> arguments for compare mode.");
         }
 
         if (ticks <= 0)
@@ -225,8 +244,10 @@ internal static class Program
             throw new ArgumentOutOfRangeException(nameof(maxDegree));
         }
 
+        int resolvedSeed = seed ?? 0;
+
         return new Options(
-            seed!.Value,
+            resolvedSeed,
             ticks,
             agents,
             mode,
@@ -236,7 +257,9 @@ internal static class Program
             population,
             resumePath,
             parallel,
-            resolvedMaxDegree);
+            resolvedMaxDegree,
+            comparePathA,
+            comparePathB);
     }
 
     private static int ParseIntValue(string[] args, ref int index, string name)
@@ -275,7 +298,8 @@ internal static class Program
             "sim" => RunMode.Sim,
             "episode" => RunMode.Episode,
             "train" => RunMode.Train,
-            _ => throw new ArgumentException($"Invalid mode '{value}'. Use 'sim', 'episode', or 'train'.")
+            "compare" => RunMode.Compare,
+            _ => throw new ArgumentException($"Invalid mode '{value}'. Use 'sim', 'episode', 'train', or 'compare'.")
         };
     }
 
@@ -382,10 +406,11 @@ internal static class Program
 
         Trainer trainer = new();
         Genome? bestOverall = null;
-        double bestOverallFitness = double.MinValue;
+        GenomeFitnessScore? bestOverallScore = null;
         double? initialBestFitness = null;
         double? finalBestFitness = null;
         string? bestOverallPath = null;
+        GenerationResult? finalResult = null;
 
         using StreamWriter logWriter = CreateTrainLogWriter(logPath);
 
@@ -403,10 +428,20 @@ internal static class Program
                 options.Parallel ? options.MaxDegree : null);
 
             Genome? bestGenome = result.BestGenome;
-            if (bestGenome is not null && result.BestFitness > bestOverallFitness)
+            if (bestGenome is not null)
             {
-                bestOverallFitness = result.BestFitness;
-                bestOverall = bestGenome;
+                GenomeFitnessScore generationScore = new(
+                    result.BestGenomeIndex,
+                    result.BestFitness,
+                    result.RawFitnesses[result.BestGenomeIndex],
+                    result.BestGenomeNodeCount,
+                    result.BestGenomeConnectionCount);
+
+                if (!bestOverallScore.HasValue || GenomeFitnessScore.Compare(generationScore, bestOverallScore.Value) < 0)
+                {
+                    bestOverallScore = generationScore;
+                    bestOverall = bestGenome;
+                }
             }
 
             if (!initialBestFitness.HasValue)
@@ -415,6 +450,7 @@ internal static class Program
             }
 
             finalBestFitness = result.BestFitness;
+            finalResult = result;
 
             Console.WriteLine(
                 $"Gen={result.Generation} Best={result.BestFitness:0.000} Mean={result.MeanFitness:0.000} " +
@@ -434,7 +470,7 @@ internal static class Program
                 WriteGenomeJson(bestGenome, generationPath);
             }
 
-            population = evolver.NextGeneration(population, result.Fitnesses, rng);
+            population = evolver.NextGeneration(population, result.Fitnesses, result.RawFitnesses, rng);
             WriteCheckpoint(population, evoConfig, rng.GetState(), options.ResumePath);
         }
 
@@ -452,6 +488,11 @@ internal static class Program
 
         Console.WriteLine($"BestGenome Path={bestOverallPath ?? "none"}");
         Console.WriteLine($"TrainLog Path={logPath}");
+
+        if (finalResult is not null)
+        {
+            WriteRunManifest(options, evoConfig, logPath, bestOverallPath, finalResult);
+        }
     }
 
     private static void WriteGenomeJson(Genome genome, string path)
@@ -478,11 +519,76 @@ internal static class Program
         return PopulationJson.Deserialize(json);
     }
 
+    internal static ManifestComparisonResult CompareManifests(string pathA, string pathB)
+    {
+        RunManifest manifestA = RunManifestJson.Read(pathA);
+        RunManifest manifestB = RunManifestJson.Read(pathB);
+        IReadOnlyList<string> differences = RunManifestComparer.Compare(manifestA, manifestB);
+        return new ManifestComparisonResult(differences.Count == 0, differences);
+    }
+
+    internal static void RunCompare(string pathA, string pathB)
+    {
+        ManifestComparisonResult result = CompareManifests(pathA, pathB);
+        Console.WriteLine($"Equivalent: {(result.Equivalent ? "YES" : "NO")}");
+        if (!result.Equivalent)
+        {
+            Console.WriteLine("Differences:");
+            foreach (string difference in result.Differences)
+            {
+                Console.WriteLine($"- {difference}");
+            }
+        }
+    }
+
+    private static void WriteRunManifest(
+        Options options,
+        EvolutionConfig evoConfig,
+        string logPath,
+        string? bestGenomePath,
+        GenerationResult finalResult)
+    {
+        RunManifest manifest = new(
+            SchemaVersion: 1,
+            CreatedUtc: DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture),
+            Seed: options.Seed,
+            Generations: options.Generations,
+            Population: options.Population,
+            EpisodesPerGenome: options.Episodes,
+            TicksPerEpisode: options.Ticks,
+            Parallel: options.Parallel ? 1 : 0,
+            MaxDegree: options.MaxDegree,
+            EvolutionConfig: new EvolutionConfigManifest(
+                evoConfig.EliteCount,
+                evoConfig.MutationRate,
+                evoConfig.AddConnectionRate,
+                evoConfig.AddNodeRate,
+                evoConfig.WeightPerturbRate,
+                evoConfig.WeightResetRate,
+                evoConfig.MaxNodes,
+                evoConfig.MaxConnections),
+            BestGenomePath: bestGenomePath ?? string.Empty,
+            CheckpointPath: options.ResumePath,
+            TrainLogPath: logPath,
+            FinalSummary: new RunManifestSummary(
+                finalResult.BestFitness,
+                finalResult.MeanFitness,
+                finalResult.BestGenomeNodeCount,
+                finalResult.BestGenomeConnectionCount,
+                finalResult.BestTicksSurvived,
+                finalResult.BestSuccessfulDrinks,
+                finalResult.BestAvgThirst01));
+
+        string manifestPath = Path.Combine("artifacts", "run_manifest.json");
+        RunManifestJson.Write(manifestPath, manifest);
+    }
+
     internal enum RunMode
     {
         Sim,
         Episode,
-        Train
+        Train,
+        Compare
     }
 
     internal readonly record struct Options(
@@ -496,7 +602,11 @@ internal static class Program
         int Population,
         string ResumePath,
         bool Parallel,
-        int MaxDegree);
+        int MaxDegree,
+        string ComparePathA,
+        string ComparePathB);
+
+    internal readonly record struct ManifestComparisonResult(bool Equivalent, IReadOnlyList<string> Differences);
 
     private static StreamWriter CreateTrainLogWriter(string logPath)
     {

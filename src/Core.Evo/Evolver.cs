@@ -2,8 +2,6 @@ namespace Core.Evo;
 
 public sealed class Evolver
 {
-    private const double ComplexityNodePenalty = 0.01;
-    private const double ComplexityConnectionPenalty = 0.001;
     private const double SelectionFraction = 0.2;
     private readonly EvolutionConfig _config;
     private readonly Dictionary<(int InNodeId, int OutNodeId), int> _innovationIds = new();
@@ -76,40 +74,59 @@ public sealed class Evolver
     public Population NextGeneration(Population current, IReadOnlyList<double> fitnesses, int seed)
     {
         EvoRng rng = new(seed);
-        return NextGeneration(current, fitnesses, rng);
+        return NextGeneration(current, fitnesses, fitnesses, rng);
     }
 
     public Population NextGeneration(Population current, IReadOnlyList<double> fitnesses, EvoRng rng)
+    {
+        return NextGeneration(current, fitnesses, fitnesses, rng);
+    }
+
+    public Population NextGeneration(
+        Population current,
+        IReadOnlyList<double> fitnessAdjusted,
+        IReadOnlyList<double> fitnessRaw,
+        EvoRng rng)
     {
         if (current is null)
         {
             throw new ArgumentNullException(nameof(current));
         }
 
-        if (fitnesses is null)
+        if (fitnessAdjusted is null)
         {
-            throw new ArgumentNullException(nameof(fitnesses));
+            throw new ArgumentNullException(nameof(fitnessAdjusted));
         }
 
-        if (fitnesses.Count != current.Genomes.Count)
+        if (fitnessRaw is null)
         {
-            throw new ArgumentException("Fitness list must match genome count.", nameof(fitnesses));
+            throw new ArgumentNullException(nameof(fitnessRaw));
         }
 
-        List<(int Index, double Fitness)> scored = new(current.Genomes.Count);
+        if (fitnessAdjusted.Count != current.Genomes.Count)
+        {
+            throw new ArgumentException("Fitness list must match genome count.", nameof(fitnessAdjusted));
+        }
+
+        if (fitnessRaw.Count != current.Genomes.Count)
+        {
+            throw new ArgumentException("Fitness list must match genome count.", nameof(fitnessRaw));
+        }
+
+        List<GenomeFitnessScore> scored = new(current.Genomes.Count);
         for (int i = 0; i < current.Genomes.Count; i += 1)
         {
             Genome genome = current.Genomes[i];
-            double penalty = (ComplexityNodePenalty * genome.NodeCount)
-                + (ComplexityConnectionPenalty * genome.ConnectionCount);
-            scored.Add((i, fitnesses[i] - penalty));
+            scored.Add(new GenomeFitnessScore(
+                i,
+                fitnessAdjusted[i],
+                fitnessRaw[i],
+                genome.NodeCount,
+                genome.ConnectionCount));
         }
 
         scored.Sort((a, b) =>
-        {
-            int fitnessCompare = b.Fitness.CompareTo(a.Fitness);
-            return fitnessCompare != 0 ? fitnessCompare : a.Index.CompareTo(b.Index);
-        });
+            GenomeFitnessScore.Compare(a, b));
 
         int eliteCount = Math.Min(_config.EliteCount, scored.Count);
         int selectionCount = Math.Max(1, (int)Math.Ceiling(scored.Count * SelectionFraction));
