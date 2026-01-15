@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using Core.Evo;
 
 namespace Core.Sim;
@@ -13,7 +14,9 @@ public sealed class Trainer
         int baseSeed,
         int episodesPerGenome,
         SimulationConfig simConfig,
-        int ticksPerEpisode)
+        int ticksPerEpisode,
+        bool useParallel = false,
+        int? maxDegreeOfParallelism = null)
     {
         if (pop is null)
         {
@@ -30,24 +33,25 @@ public sealed class Trainer
             throw new ArgumentOutOfRangeException(nameof(ticksPerEpisode));
         }
 
+        if (useParallel && maxDegreeOfParallelism.HasValue && maxDegreeOfParallelism.Value <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxDegreeOfParallelism));
+        }
+
         int inputCount = (simConfig.AgentVisionRays * 3) + 1;
         int outputCount = 1;
 
         EpisodeRunner runner = new(simConfig);
 
-        double[] fitnesses = new double[pop.Genomes.Count];
-        double totalFitness = 0.0;
-        double bestFitness = double.MinValue;
-        double worstFitness = double.MaxValue;
-        int bestIndex = 0;
-        Genome? bestGenome = null;
-        int bestGenomeNodeCount = 0;
-        int bestGenomeConnectionCount = 0;
-        int bestTicksSurvived = 0;
-        int bestSuccessfulDrinks = 0;
-        float bestAvgThirst01 = 0f;
+        int genomeCount = pop.Genomes.Count;
+        double[] fitnesses = new double[genomeCount];
+        double[] avgTicksSurvived = new double[genomeCount];
+        double[] avgSuccessfulDrinks = new double[genomeCount];
+        float[] avgThirst01 = new float[genomeCount];
+        int[] nodeCounts = new int[genomeCount];
+        int[] connectionCounts = new int[genomeCount];
 
-        for (int i = 0; i < pop.Genomes.Count; i += 1)
+        void EvaluateGenome(int i)
         {
             Genome genome = pop.Genomes[i];
             IBrain brain = _brainFactory.CreateBrain(genome, inputCount, outputCount);
@@ -71,22 +75,56 @@ public sealed class Trainer
                 + (ComplexityConnectionPenalty * genome.ConnectionCount);
             double adjustedFitness = rawFitness - penalty;
             fitnesses[i] = adjustedFitness;
+            avgTicksSurvived[i] = ticksSurvivedSum / episodesPerGenome;
+            avgSuccessfulDrinks[i] = successfulDrinksSum / episodesPerGenome;
+            avgThirst01[i] = (float)(avgThirstSum / episodesPerGenome);
+            nodeCounts[i] = genome.NodeCount;
+            connectionCounts[i] = genome.ConnectionCount;
+        }
+
+        if (useParallel)
+        {
+            int degree = maxDegreeOfParallelism ?? Environment.ProcessorCount;
+            Parallel.For(0, genomeCount, new ParallelOptions { MaxDegreeOfParallelism = degree }, EvaluateGenome);
+        }
+        else
+        {
+            for (int i = 0; i < genomeCount; i += 1)
+            {
+                EvaluateGenome(i);
+            }
+        }
+
+        double totalFitness = 0.0;
+        double bestFitness = double.MinValue;
+        double worstFitness = double.MaxValue;
+        int bestIndex = 0;
+        Genome? bestGenome = null;
+        int bestGenomeNodeCount = 0;
+        int bestGenomeConnectionCount = 0;
+        int bestTicksSurvived = 0;
+        int bestSuccessfulDrinks = 0;
+        float bestAvgThirst = 0f;
+
+        for (int i = 0; i < genomeCount; i += 1)
+        {
+            double adjustedFitness = fitnesses[i];
             totalFitness += adjustedFitness;
 
-            if (adjustedFitness > bestFitness)
+            if (adjustedFitness > bestFitness || (adjustedFitness == bestFitness && i < bestIndex))
             {
                 bestFitness = adjustedFitness;
                 bestIndex = i;
-                bestGenome = genome;
-                bestGenomeNodeCount = genome.NodeCount;
-                bestGenomeConnectionCount = genome.ConnectionCount;
+                bestGenome = pop.Genomes[i];
+                bestGenomeNodeCount = nodeCounts[i];
+                bestGenomeConnectionCount = connectionCounts[i];
                 bestTicksSurvived = (int)Math.Round(
-                    ticksSurvivedSum / episodesPerGenome,
+                    avgTicksSurvived[i],
                     MidpointRounding.AwayFromZero);
                 bestSuccessfulDrinks = (int)Math.Round(
-                    successfulDrinksSum / episodesPerGenome,
+                    avgSuccessfulDrinks[i],
                     MidpointRounding.AwayFromZero);
-                bestAvgThirst01 = (float)(avgThirstSum / episodesPerGenome);
+                bestAvgThirst = avgThirst01[i];
             }
 
             if (adjustedFitness < worstFitness)
@@ -95,7 +133,7 @@ public sealed class Trainer
             }
         }
 
-        double meanFitness = totalFitness / pop.Genomes.Count;
+        double meanFitness = totalFitness / genomeCount;
 
         return new GenerationResult(
             pop.Generation,
@@ -109,6 +147,6 @@ public sealed class Trainer
             bestGenomeConnectionCount,
             bestTicksSurvived,
             bestSuccessfulDrinks,
-            bestAvgThirst01);
+            bestAvgThirst);
     }
 }
