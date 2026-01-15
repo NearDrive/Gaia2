@@ -1,3 +1,4 @@
+using System.Numerics;
 using Core.Sim;
 using Xunit;
 using Xunit.Abstractions;
@@ -42,11 +43,12 @@ public class EpisodeRunnerTests
     [Fact]
     public void Fitness_RewardsSurvival()
     {
-        SimulationConfig config = CreateConfig(thirstRate: 1f, deathGrace: 2f);
+        SimulationConfig config = CreateConfig(thirstRate: 0.2f, deathGrace: 2f);
         EpisodeRunner runner = new(config);
+        Vector2 startPosition = FindWaterStart(config, 42);
 
-        EpisodeResult rBad = runner.RunEpisode(new NoDrinkBrain(), 42, 50, 1);
-        EpisodeResult rGood = runner.RunEpisode(new AlwaysDrinkBrain(), 42, 50, 1);
+        EpisodeResult rBad = runner.RunEpisode(new NoDrinkBrain(), 42, 50, new[] { startPosition });
+        EpisodeResult rGood = runner.RunEpisode(new AlwaysDrinkBrain(), 42, 50, new[] { startPosition });
 
         _output.WriteLine($"Bad: Ticks={rBad.TicksSurvived} Drinks={rBad.SuccessfulDrinks} Thirst={rBad.AvgThirst01:0.000000} Fitness={rBad.Fitness:0.000}");
         _output.WriteLine($"Good: Ticks={rGood.TicksSurvived} Drinks={rGood.SuccessfulDrinks} Thirst={rGood.AvgThirst01:0.000000} Fitness={rGood.Fitness:0.000}");
@@ -70,13 +72,30 @@ public class EpisodeRunnerTests
             0,
             1f,
             100,
-            1,
-            1,
+            8,
+            8,
             4,
             4f,
             MathF.PI / 2f,
             thirstRate,
             deathGrace);
+    }
+
+    private static Vector2 FindWaterStart(SimulationConfig config, int seed)
+    {
+        GridWorld world = new(config.WorldWidth, config.WorldHeight, seed);
+        for (int y = 0; y < world.Height; y += 1)
+        {
+            for (int x = 0; x < world.Width; x += 1)
+            {
+                if (world.GetTile(x, y).Id == TileId.Water)
+                {
+                    return new Vector2(x + 0.5f, y + 0.5f);
+                }
+            }
+        }
+
+        throw new InvalidOperationException("No water tile found in test world.");
     }
 
     private sealed class NoDrinkBrain : IBrain

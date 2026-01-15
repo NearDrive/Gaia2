@@ -1,3 +1,5 @@
+using System.Numerics;
+
 namespace Core.Sim;
 
 public sealed class EpisodeRunner
@@ -33,6 +35,43 @@ public sealed class EpisodeRunner
         };
 
         Simulation simulation = new(config, agentCount);
+        return RunEpisodeInternal(brain, seed, ticks, simulation);
+    }
+
+    public EpisodeResult RunEpisode(IBrain brain, int seed, int ticks, IReadOnlyList<Vector2> initialAgentPositions)
+    {
+        if (brain is null)
+        {
+            throw new ArgumentNullException(nameof(brain));
+        }
+
+        if (ticks <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(ticks));
+        }
+
+        if (initialAgentPositions is null)
+        {
+            throw new ArgumentNullException(nameof(initialAgentPositions));
+        }
+
+        if (initialAgentPositions.Count <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(initialAgentPositions));
+        }
+
+        SimulationConfig config = _baseConfig with
+        {
+            Seed = seed,
+            TicksPerEpisode = ticks
+        };
+
+        Simulation simulation = new(config, initialAgentPositions);
+        return RunEpisodeInternal(brain, seed, ticks, simulation);
+    }
+
+    private static EpisodeResult RunEpisodeInternal(IBrain brain, int seed, int ticks, Simulation simulation)
+    {
         int ticksSurvived = 0;
         int successfulDrinks = 0;
         long thirstSumMilli = 0;

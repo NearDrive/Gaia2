@@ -42,6 +42,40 @@ public sealed class Simulation
         }
     }
 
+    public Simulation(SimulationConfig config, IReadOnlyList<Vector2> initialPositions)
+    {
+        if (initialPositions is null)
+        {
+            throw new ArgumentNullException(nameof(initialPositions));
+        }
+
+        if (initialPositions.Count <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(initialPositions));
+        }
+
+        if (config.WorldWidth <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(config.WorldWidth));
+        }
+
+        if (config.WorldHeight <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(config.WorldHeight));
+        }
+
+        Config = config;
+        _rng = new SimRng(config.Seed);
+        _agents = new List<AgentState>(initialPositions.Count);
+        World = new GridWorld(config.WorldWidth, config.WorldHeight, config.Seed);
+        _visionSensor = new VisionSensor(config.AgentVisionRays, config.AgentVisionRange, config.AgentFov);
+
+        foreach (Vector2 position in initialPositions)
+        {
+            _agents.Add(new AgentState(position));
+        }
+    }
+
     public int Tick { get; private set; }
 
     public SimulationConfig Config { get; }
