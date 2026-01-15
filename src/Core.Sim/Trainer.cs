@@ -50,6 +50,8 @@ public sealed class Trainer
         double[] avgSuccessfulDrinks = new double[genomeCount];
         double[] avgDistanceTraveled = new double[genomeCount];
         float[] avgThirst01 = new float[genomeCount];
+        double[] avgVisitedCells = new double[genomeCount];
+        double[] avgDrinkableCellsVisited = new double[genomeCount];
         int[] nodeCounts = new int[genomeCount];
         int[] connectionCounts = new int[genomeCount];
 
@@ -62,6 +64,8 @@ public sealed class Trainer
             double successfulDrinksSum = 0.0;
             double avgThirstSum = 0.0;
             double distanceSum = 0.0;
+            double visitedCellsSum = 0.0;
+            double drinkableCellsVisitedSum = 0.0;
 
             for (int episode = 0; episode < episodesPerGenome; episode += 1)
             {
@@ -72,6 +76,8 @@ public sealed class Trainer
                 successfulDrinksSum += result.SuccessfulDrinks;
                 avgThirstSum += result.AvgThirst01;
                 distanceSum += result.DistanceTraveled;
+                visitedCellsSum += result.VisitedCells;
+                drinkableCellsVisitedSum += result.DrinkableCellsVisited;
             }
 
             double rawFitness = fitnessSum / episodesPerGenome;
@@ -84,6 +90,8 @@ public sealed class Trainer
             avgSuccessfulDrinks[i] = successfulDrinksSum / episodesPerGenome;
             avgDistanceTraveled[i] = distanceSum / episodesPerGenome;
             avgThirst01[i] = (float)(avgThirstSum / episodesPerGenome);
+            avgVisitedCells[i] = visitedCellsSum / episodesPerGenome;
+            avgDrinkableCellsVisited[i] = drinkableCellsVisitedSum / episodesPerGenome;
             nodeCounts[i] = genome.NodeCount;
             connectionCounts[i] = genome.ConnectionCount;
         }
@@ -112,12 +120,16 @@ public sealed class Trainer
         int bestSuccessfulDrinks = 0;
         float bestAvgThirst = 0f;
         double bestDistanceTraveled = 0.0;
+        int bestVisitedCells = 0;
+        int bestDrinkableCellsVisited = 0;
         GenomeFitnessScore? bestScore = null;
+        double totalVisitedCells = 0.0;
 
         for (int i = 0; i < genomeCount; i += 1)
         {
             double adjustedFitness = fitnesses[i];
             totalFitness += adjustedFitness;
+            totalVisitedCells += avgVisitedCells[i];
 
             GenomeFitnessScore score = new(
                 i,
@@ -142,6 +154,12 @@ public sealed class Trainer
                     MidpointRounding.AwayFromZero);
                 bestAvgThirst = avgThirst01[i];
                 bestDistanceTraveled = avgDistanceTraveled[i];
+                bestVisitedCells = (int)Math.Round(
+                    avgVisitedCells[i],
+                    MidpointRounding.AwayFromZero);
+                bestDrinkableCellsVisited = (int)Math.Round(
+                    avgDrinkableCellsVisited[i],
+                    MidpointRounding.AwayFromZero);
             }
 
             if (adjustedFitness < worstFitness)
@@ -151,6 +169,7 @@ public sealed class Trainer
         }
 
         double meanFitness = totalFitness / genomeCount;
+        double meanVisitedCells = totalVisitedCells / genomeCount;
 
         return new GenerationResult(
             pop.Generation,
@@ -166,6 +185,9 @@ public sealed class Trainer
             bestTicksSurvived,
             bestSuccessfulDrinks,
             bestAvgThirst,
-            bestDistanceTraveled);
+            bestDistanceTraveled,
+            bestVisitedCells,
+            bestDrinkableCellsVisited,
+            meanVisitedCells);
     }
 }
