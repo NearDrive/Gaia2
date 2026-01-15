@@ -11,7 +11,12 @@ public sealed class GenerationResult
         double worstFitness,
         int bestGenomeIndex,
         IReadOnlyList<double> fitnesses,
-        Genome? bestGenome)
+        Genome? bestGenome,
+        int bestGenomeNodeCount,
+        int bestGenomeConnectionCount,
+        int bestTicksSurvived,
+        int bestSuccessfulDrinks,
+        float bestAvgThirst01)
     {
         Generation = generation;
         BestFitness = bestFitness;
@@ -20,6 +25,11 @@ public sealed class GenerationResult
         BestGenomeIndex = bestGenomeIndex;
         Fitnesses = fitnesses ?? throw new ArgumentNullException(nameof(fitnesses));
         BestGenome = bestGenome;
+        BestGenomeNodeCount = bestGenomeNodeCount;
+        BestGenomeConnectionCount = bestGenomeConnectionCount;
+        BestTicksSurvived = bestTicksSurvived;
+        BestSuccessfulDrinks = bestSuccessfulDrinks;
+        BestAvgThirst01 = bestAvgThirst01;
     }
 
     public int Generation { get; }
@@ -35,4 +45,14 @@ public sealed class GenerationResult
     public IReadOnlyList<double> Fitnesses { get; }
 
     public Genome? BestGenome { get; }
+
+    public int BestGenomeNodeCount { get; }
+
+    public int BestGenomeConnectionCount { get; }
+
+    public int BestTicksSurvived { get; }
+
+    public int BestSuccessfulDrinks { get; }
+
+    public float BestAvgThirst01 { get; }
 }
