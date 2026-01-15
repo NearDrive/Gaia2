@@ -21,7 +21,11 @@ public sealed class GenerationResult
         double bestDistanceTraveled,
         int bestVisitedCells,
         int bestDrinkableCellsVisited,
-        double meanVisitedCells)
+        double meanVisitedCells,
+        int worldSize,
+        float obstacleDensity01,
+        float waterProximityBias01,
+        int ticksPerEpisode)
     {
         Generation = generation;
         BestFitness = bestFitness;
@@ -40,6 +44,10 @@ public sealed class GenerationResult
         BestVisitedCells = bestVisitedCells;
         BestDrinkableCellsVisited = bestDrinkableCellsVisited;
         MeanVisitedCells = meanVisitedCells;
+        WorldSize = worldSize;
+        ObstacleDensity01 = obstacleDensity01;
+        WaterProximityBias01 = waterProximityBias01;
+        TicksPerEpisode = ticksPerEpisode;
     }
 
     public int Generation { get; }
@@ -75,4 +83,12 @@ public sealed class GenerationResult
     public int BestDrinkableCellsVisited { get; }
 
     public double MeanVisitedCells { get; }
+
+    public int WorldSize { get; }
+
+    public float ObstacleDensity01 { get; }
+
+    public float WaterProximityBias01 { get; }
+
+    public int TicksPerEpisode { get; }
 }

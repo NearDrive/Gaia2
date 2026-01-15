@@ -43,6 +43,20 @@ public class EvolutionDeterminismTests
 
         Population population = evolver.CreateInitialPopulation(seed, config.PopulationSize, inputCount, outputCount);
         Trainer trainer = new();
+        CurriculumSchedule curriculum = new(
+            totalGenerations: 3,
+            start: new CurriculumPhase(
+                WaterProximityBias01: 1f,
+                ObstacleDensity01: 0.1f,
+                WorldSize: 16,
+                TicksPerEpisode: 50,
+                ThirstRatePerSecond: simConfig.ThirstRatePerSecond),
+            end: new CurriculumPhase(
+                WaterProximityBias01: 0f,
+                ObstacleDensity01: 0.4f,
+                WorldSize: 20,
+                TicksPerEpisode: 50,
+                ThirstRatePerSecond: simConfig.ThirstRatePerSecond * 1.1f));
 
         double bestFitness = double.MinValue;
         for (int generation = 0; generation < 3; generation += 1)
@@ -52,7 +66,7 @@ public class EvolutionDeterminismTests
                 baseSeed: seed + (generation * 1000),
                 episodesPerGenome: 1,
                 simConfig,
-                ticksPerEpisode: 50);
+                curriculum);
 
             bestFitness = result.BestFitness;
             population = evolver.NextGeneration(population, result.Fitnesses, seed + generation + 1);

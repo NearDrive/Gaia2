@@ -114,7 +114,7 @@ public class RunManifestTests
     private static RunManifest CreateSampleManifest(int population)
     {
         return new RunManifest(
-            SchemaVersion: 1,
+            SchemaVersion: 2,
             CreatedUtc: "2024-01-01T00:00:00Z",
             Seed: 123,
             Generations: 2,
@@ -132,6 +132,20 @@ public class RunManifestTests
                 WeightResetRate: 0.1,
                 MaxNodes: 16,
                 MaxConnections: 32),
+            CurriculumSchedule: new CurriculumScheduleManifest(
+                TotalGenerations: 2,
+                Start: new CurriculumPhaseManifest(
+                    WaterProximityBias01: 1f,
+                    ObstacleDensity01: 0.1f,
+                    WorldSize: 12,
+                    TicksPerEpisode: 10,
+                    ThirstRatePerSecond: 0.01f),
+                End: new CurriculumPhaseManifest(
+                    WaterProximityBias01: 0f,
+                    ObstacleDensity01: 0.4f,
+                    WorldSize: 16,
+                    TicksPerEpisode: 10,
+                    ThirstRatePerSecond: 0.012f)),
             BestGenomePath: "artifacts/best.json",
             CheckpointPath: "artifacts/checkpoint.json",
             TrainLogPath: "artifacts/train_log.csv",

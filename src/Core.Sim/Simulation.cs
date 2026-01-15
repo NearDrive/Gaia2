@@ -7,6 +7,7 @@ public sealed class Simulation
 {
     private const float DrinkAmount = 0.25f;
     private const float DrinkThreshold = 0.6f;
+    private const int SpawnWaterRadius = 3;
     private readonly List<AgentState> _agents;
     private readonly SimRng _rng;
     private readonly VisionSensor _visionSensor;
@@ -31,14 +32,26 @@ public sealed class Simulation
         Config = config;
         _rng = new SimRng(config.Seed);
         _agents = new List<AgentState>(agentCount);
-        World = new GridWorld(config.WorldWidth, config.WorldHeight, config.Seed);
+        Vector2 spawnHint = new(
+            _rng.NextFloat(0f, config.WorldWidth),
+            _rng.NextFloat(0f, config.WorldHeight));
+        World = new GridWorld(
+            config.WorldWidth,
+            config.WorldHeight,
+            config.Seed,
+            config.ObstacleDensity01,
+            config.WaterProximityBias01,
+            spawnHint);
         _visionSensor = new VisionSensor(config.AgentVisionRays, config.AgentVisionRange, config.AgentFov);
 
         for (int i = 0; i < agentCount; i += 1)
         {
-            Vector2 position = new Vector2(
-                _rng.NextFloat(0f, config.WorldWidth),
-                _rng.NextFloat(0f, config.WorldHeight));
+            bool useBias = i == 0 || _rng.NextFloat() < config.WaterProximityBias01;
+            Vector2 position = useBias
+                ? FindSpawnNearWater(World, spawnHint, SpawnWaterRadius)
+                : new Vector2(
+                    _rng.NextFloat(0f, config.WorldWidth),
+                    _rng.NextFloat(0f, config.WorldHeight));
             _agents.Add(new AgentState(position, CreateVisionBuffer()));
         }
     }
@@ -68,7 +81,14 @@ public sealed class Simulation
         Config = config;
         _rng = new SimRng(config.Seed);
         _agents = new List<AgentState>(initialPositions.Count);
-        World = new GridWorld(config.WorldWidth, config.WorldHeight, config.Seed);
+        Vector2? spawnHint = initialPositions.Count > 0 ? initialPositions[0] : null;
+        World = new GridWorld(
+            config.WorldWidth,
+            config.WorldHeight,
+            config.Seed,
+            config.ObstacleDensity01,
+            config.WaterProximityBias01,
+            spawnHint);
         _visionSensor = new VisionSensor(config.AgentVisionRays, config.AgentVisionRange, config.AgentFov);
 
         foreach (Vector2 position in initialPositions)
@@ -279,5 +299,80 @@ public sealed class Simulation
 
         float speed = Config.AgentMaxSpeed * magnitude;
         return direction * (speed * Config.Dt);
+    }
+
+    private static Vector2 FindSpawnNearWater(GridWorld world, Vector2 anchor, int radius)
+    {
+        int anchorX = (int)MathF.Floor(anchor.X);
+        int anchorY = (int)MathF.Floor(anchor.Y);
+
+        for (int r = 0; r <= radius; r += 1)
+        {
+            for (int dy = -r; dy <= r; dy += 1)
+            {
+                for (int dx = -r; dx <= r; dx += 1)
+                {
+                    int x = anchorX + dx;
+                    int y = anchorY + dy;
+                    if (!world.InBounds(x, y))
+                    {
+                        continue;
+                    }
+
+                    if (world.GetTile(x, y).Id != TileId.Empty)
+                    {
+                        continue;
+                    }
+
+                    if (HasWaterWithinRadius(world, x, y, radius))
+                    {
+                        return new Vector2(x + 0.5f, y + 0.5f);
+                    }
+                }
+            }
+        }
+
+        for (int y = 0; y < world.Height; y += 1)
+        {
+            for (int x = 0; x < world.Width; x += 1)
+            {
+                if (world.GetTile(x, y).Id != TileId.Empty)
+                {
+                    continue;
+                }
+
+                if (HasWaterWithinRadius(world, x, y, radius))
+                {
+                    return new Vector2(x + 0.5f, y + 0.5f);
+                }
+            }
+        }
+
+        return new Vector2(
+            Math.Clamp(anchor.X, 0f, Math.Max(0f, world.Width - 0.01f)),
+            Math.Clamp(anchor.Y, 0f, Math.Max(0f, world.Height - 0.01f)));
+    }
+
+    private static bool HasWaterWithinRadius(GridWorld world, int tileX, int tileY, int radius)
+    {
+        for (int dy = -radius; dy <= radius; dy += 1)
+        {
+            for (int dx = -radius; dx <= radius; dx += 1)
+            {
+                int nx = tileX + dx;
+                int ny = tileY + dy;
+                if (!world.InBounds(nx, ny))
+                {
+                    continue;
+                }
+
+                if (world.GetTile(nx, ny).Id == TileId.Water)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 }

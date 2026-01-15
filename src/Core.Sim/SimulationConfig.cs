@@ -12,4 +12,6 @@ public readonly record struct SimulationConfig(
     float AgentMaxSpeed = 1.5f,
     float MoveDeadzone = 0.05f,
     float ThirstRatePerSecond = 0.01f,
-    float DeathGraceSeconds = 3f);
+    float DeathGraceSeconds = 3f,
+    float WaterProximityBias01 = 0f,
+    float ObstacleDensity01 = 0.05f);

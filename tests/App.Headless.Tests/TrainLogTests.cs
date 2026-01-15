@@ -80,13 +80,14 @@ public class TrainLogTests
         Evolver evolver = new(evoConfig);
         Population population = evolver.CreateInitialPopulation(seed, evoConfig.PopulationSize, inputCount, outputCount);
         Trainer trainer = new();
+        CurriculumSchedule curriculum = CreateMiniCurriculum(simConfig, totalGenerations: 1, ticks: MiniTicks);
 
         GenerationResult sequential = trainer.RunGeneration(
             population,
             baseSeed: seed + 1000,
             episodesPerGenome: MiniEpisodes,
             simConfig,
-            ticksPerEpisode: MiniTicks,
+            curriculum,
             useParallel: false);
 
         GenerationResult parallel = trainer.RunGeneration(
@@ -94,7 +95,7 @@ public class TrainLogTests
             baseSeed: seed + 1000,
             episodesPerGenome: MiniEpisodes,
             simConfig,
-            ticksPerEpisode: MiniTicks,
+            curriculum,
             useParallel: true,
             maxDegreeOfParallelism: 2);
 
@@ -187,6 +188,24 @@ public class TrainLogTests
             weightResetRate: 0.1,
             maxNodes: 16,
             maxConnections: 32);
+    }
+
+    private static CurriculumSchedule CreateMiniCurriculum(SimulationConfig simConfig, int totalGenerations, int ticks)
+    {
+        return new CurriculumSchedule(
+            totalGenerations,
+            start: new CurriculumPhase(
+                WaterProximityBias01: 1f,
+                ObstacleDensity01: 0.1f,
+                WorldSize: simConfig.WorldWidth,
+                TicksPerEpisode: ticks,
+                ThirstRatePerSecond: simConfig.ThirstRatePerSecond),
+            end: new CurriculumPhase(
+                WaterProximityBias01: 0f,
+                ObstacleDensity01: 0.4f,
+                WorldSize: simConfig.WorldWidth + 4,
+                TicksPerEpisode: ticks,
+                ThirstRatePerSecond: simConfig.ThirstRatePerSecond * 1.1f));
     }
 
     private static string CreateTempDir()

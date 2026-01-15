@@ -4,11 +4,17 @@ namespace Core.Sim;
 
 public sealed class GridWorld
 {
+    public const float DefaultObstacleDensity01 = 0.05f;
     private const ulong OffsetBasis = 14695981039346656037UL;
     private const ulong Prime = 1099511628211UL;
     private readonly Tile[] _tiles;
 
     public GridWorld(int width, int height, int seed)
+        : this(width, height, seed, DefaultObstacleDensity01, 0f, null)
+    {
+    }
+
+    public GridWorld(int width, int height, int seed, float obstacleDensity01, float waterProximityBias01, Vector2? spawnHint)
     {
         if (width <= 0)
         {
@@ -24,7 +30,7 @@ public sealed class GridWorld
         Height = height;
         _tiles = new Tile[width * height];
 
-        Generate(seed);
+        Generate(seed, obstacleDensity01, waterProximityBias01, spawnHint);
     }
 
     public int Width { get; }
@@ -81,7 +87,7 @@ public sealed class GridWorld
         return hash;
     }
 
-    private void Generate(int seed)
+    private void Generate(int seed, float obstacleDensity01, float waterProximityBias01, Vector2? spawnHint)
     {
         for (int i = 0; i < _tiles.Length; i += 1)
         {
@@ -89,11 +95,23 @@ public sealed class GridWorld
         }
 
         SimRng rng = new SimRng(seed);
+        float clampedDensity = Math.Clamp(obstacleDensity01, 0f, 1f);
+        float clampedBias = Math.Clamp(waterProximityBias01, 0f, 1f);
         int minDim = Math.Min(Width, Height);
         float radius = Math.Max(1f, (minDim * 0.1f) + (minDim * 0.1f * rng.NextFloat()));
-        Vector2 center = new Vector2(
+        Vector2 center = new(
             rng.NextFloat(0f, Width),
             rng.NextFloat(0f, Height));
+
+        if (spawnHint.HasValue && clampedBias > 0f)
+        {
+            Vector2 spawn = spawnHint.Value;
+            spawn = new Vector2(
+                Math.Clamp(spawn.X, 0f, Math.Max(0f, Width - 0.01f)),
+                Math.Clamp(spawn.Y, 0f, Math.Max(0f, Height - 0.01f)));
+            center = Vector2.Lerp(center, spawn, clampedBias);
+        }
+
         float radiusSq = radius * radius;
 
         for (int y = 0; y < Height; y += 1)
@@ -108,7 +126,8 @@ public sealed class GridWorld
             }
         }
 
-        int targetSolids = Math.Max(1, (Width * Height) / 20);
+        int targetSolids = (int)Math.Round(Width * Height * clampedDensity, MidpointRounding.AwayFromZero);
+        targetSolids = Math.Max(1, targetSolids);
         int placed = 0;
         int attempts = 0;
         int maxAttempts = targetSolids * 10;

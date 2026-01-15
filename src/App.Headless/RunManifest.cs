@@ -21,6 +21,18 @@ internal sealed record RunManifestSummary(
     int BestSuccessfulDrinks,
     float BestAvgThirst01);
 
+internal sealed record CurriculumPhaseManifest(
+    float WaterProximityBias01,
+    float ObstacleDensity01,
+    int WorldSize,
+    int TicksPerEpisode,
+    float ThirstRatePerSecond);
+
+internal sealed record CurriculumScheduleManifest(
+    int TotalGenerations,
+    CurriculumPhaseManifest Start,
+    CurriculumPhaseManifest End);
+
 internal sealed record RunManifest(
     int SchemaVersion,
     string CreatedUtc,
@@ -32,6 +44,7 @@ internal sealed record RunManifest(
     int Parallel,
     int MaxDegree,
     EvolutionConfigManifest EvolutionConfig,
+    CurriculumScheduleManifest CurriculumSchedule,
     string BestGenomePath,
     string CheckpointPath,
     string TrainLogPath,
@@ -88,6 +101,14 @@ internal static class RunManifestJson
         writer.WriteNumber("maxNodes", manifest.EvolutionConfig.MaxNodes);
         writer.WriteNumber("maxConnections", manifest.EvolutionConfig.MaxConnections);
         writer.WriteEndObject();
+        writer.WritePropertyName("curriculumSchedule");
+        writer.WriteStartObject();
+        writer.WriteNumber("totalGenerations", manifest.CurriculumSchedule.TotalGenerations);
+        writer.WritePropertyName("start");
+        WriteCurriculumPhase(writer, manifest.CurriculumSchedule.Start);
+        writer.WritePropertyName("end");
+        WriteCurriculumPhase(writer, manifest.CurriculumSchedule.End);
+        writer.WriteEndObject();
         writer.WriteString("bestGenomePath", manifest.BestGenomePath);
         writer.WriteString("checkpointPath", manifest.CheckpointPath);
         writer.WriteString("trainLogPath", manifest.TrainLogPath);
@@ -103,6 +124,17 @@ internal static class RunManifestJson
         writer.WriteEndObject();
         writer.WriteEndObject();
         writer.Flush();
+    }
+
+    private static void WriteCurriculumPhase(Utf8JsonWriter writer, CurriculumPhaseManifest phase)
+    {
+        writer.WriteStartObject();
+        writer.WriteNumber("waterProximityBias01", phase.WaterProximityBias01);
+        writer.WriteNumber("obstacleDensity01", phase.ObstacleDensity01);
+        writer.WriteNumber("worldSize", phase.WorldSize);
+        writer.WriteNumber("ticksPerEpisode", phase.TicksPerEpisode);
+        writer.WriteNumber("thirstRatePerSecond", phase.ThirstRatePerSecond);
+        writer.WriteEndObject();
     }
 }
 
@@ -153,6 +185,7 @@ internal static class RunManifestComparer
         }
 
         AppendEvolutionConfigDifferences(differences, a.EvolutionConfig, b.EvolutionConfig);
+        AppendCurriculumDifferences(differences, a.CurriculumSchedule, b.CurriculumSchedule);
         AppendSummaryDifferences(differences, a.FinalSummary, b.FinalSummary);
 
         if (!string.Equals(a.BestGenomePath, b.BestGenomePath, StringComparison.Ordinal))
@@ -257,6 +290,52 @@ internal static class RunManifestComparer
         if (a.BestAvgThirst01 != b.BestAvgThirst01)
         {
             differences.Add("finalSummary.bestAvgThirst01");
+        }
+    }
+
+    private static void AppendCurriculumDifferences(
+        ICollection<string> differences,
+        CurriculumScheduleManifest a,
+        CurriculumScheduleManifest b)
+    {
+        if (a.TotalGenerations != b.TotalGenerations)
+        {
+            differences.Add("curriculumSchedule.totalGenerations");
+        }
+
+        AppendCurriculumPhaseDifferences(differences, "curriculumSchedule.start", a.Start, b.Start);
+        AppendCurriculumPhaseDifferences(differences, "curriculumSchedule.end", a.End, b.End);
+    }
+
+    private static void AppendCurriculumPhaseDifferences(
+        ICollection<string> differences,
+        string prefix,
+        CurriculumPhaseManifest a,
+        CurriculumPhaseManifest b)
+    {
+        if (a.WaterProximityBias01 != b.WaterProximityBias01)
+        {
+            differences.Add($"{prefix}.waterProximityBias01");
+        }
+
+        if (a.ObstacleDensity01 != b.ObstacleDensity01)
+        {
+            differences.Add($"{prefix}.obstacleDensity01");
+        }
+
+        if (a.WorldSize != b.WorldSize)
+        {
+            differences.Add($"{prefix}.worldSize");
+        }
+
+        if (a.TicksPerEpisode != b.TicksPerEpisode)
+        {
+            differences.Add($"{prefix}.ticksPerEpisode");
+        }
+
+        if (a.ThirstRatePerSecond != b.ThirstRatePerSecond)
+        {
+            differences.Add($"{prefix}.thirstRatePerSecond");
         }
     }
 }
