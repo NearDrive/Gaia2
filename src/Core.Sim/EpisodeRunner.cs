@@ -20,7 +20,8 @@ public sealed class EpisodeRunner
         int ticks,
         int agentCount = 1,
         bool captureSnapshots = false,
-        int snapshotEveryNTicks = 0)
+        int snapshotEveryNTicks = 0,
+        string? snapshotsOutDir = null)
     {
         if (brain is null)
         {
@@ -44,7 +45,7 @@ public sealed class EpisodeRunner
         };
 
         Simulation simulation = new(config, agentCount);
-        return RunEpisodeInternal(brain, seed, ticks, simulation, captureSnapshots, snapshotEveryNTicks);
+        return RunEpisodeInternal(brain, seed, ticks, simulation, captureSnapshots, snapshotEveryNTicks, snapshotsOutDir);
     }
 
     public EpisodeResult RunEpisode(
@@ -53,7 +54,8 @@ public sealed class EpisodeRunner
         int ticks,
         IReadOnlyList<Vector2> initialAgentPositions,
         bool captureSnapshots = false,
-        int snapshotEveryNTicks = 0)
+        int snapshotEveryNTicks = 0,
+        string? snapshotsOutDir = null)
     {
         if (brain is null)
         {
@@ -82,7 +84,7 @@ public sealed class EpisodeRunner
         };
 
         Simulation simulation = new(config, initialAgentPositions);
-        return RunEpisodeInternal(brain, seed, ticks, simulation, captureSnapshots, snapshotEveryNTicks);
+        return RunEpisodeInternal(brain, seed, ticks, simulation, captureSnapshots, snapshotEveryNTicks, snapshotsOutDir);
     }
 
     private static EpisodeResult RunEpisodeInternal(
@@ -91,7 +93,8 @@ public sealed class EpisodeRunner
         int ticks,
         Simulation simulation,
         bool captureSnapshots,
-        int snapshotEveryNTicks)
+        int snapshotEveryNTicks,
+        string? snapshotsOutDir)
     {
         int ticksSurvived = 0;
         int successfulDrinks = 0;
@@ -153,7 +156,7 @@ public sealed class EpisodeRunner
 
         if (captureSnapshots && snapshotEveryNTicks > 0 && snapshots.Count > 0)
         {
-            string snapshotsDirectory = Path.Combine("artifacts", "snapshots");
+            string snapshotsDirectory = snapshotsOutDir ?? Path.Combine("artifacts", "snapshots");
             SnapshotJson.WriteSnapshots(snapshotsDirectory, snapshots);
         }
 

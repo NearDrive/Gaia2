@@ -12,22 +12,44 @@ public class SnapshotTests
         SimulationConfig config = CreateConfig();
         EpisodeRunner runner = new(config);
         IBrain brain = new NoOpBrain();
-        string snapshotDirectory = Path.Combine("artifacts", "snapshots");
         const int snapshotEvery = 50;
+        string outDir = CreateSnapshotDirectory();
 
-        CleanSnapshots(snapshotDirectory);
-        runner.RunEpisode(brain, 12345, 60, 2, captureSnapshots: true, snapshotEveryNTicks: snapshotEvery);
-        string firstJson = ReadSnapshotJson(snapshotDirectory, snapshotEvery);
-        WorldSnapshot first = SnapshotJson.Deserialize(firstJson);
+        try
+        {
+            runner.RunEpisode(
+                brain,
+                12345,
+                60,
+                2,
+                captureSnapshots: true,
+                snapshotEveryNTicks: snapshotEvery,
+                snapshotsOutDir: outDir);
+            string firstJson = ReadSnapshotJson(outDir, snapshotEvery);
+            WorldSnapshot first = SnapshotJson.Deserialize(firstJson);
 
-        CleanSnapshots(snapshotDirectory);
-        runner.RunEpisode(brain, 12345, 60, 2, captureSnapshots: true, snapshotEveryNTicks: snapshotEvery);
-        string secondJson = ReadSnapshotJson(snapshotDirectory, snapshotEvery);
-        WorldSnapshot second = SnapshotJson.Deserialize(secondJson);
+            Directory.Delete(outDir, true);
+            Directory.CreateDirectory(outDir);
 
-        Assert.Equal(first.Header.WorldChecksum, second.Header.WorldChecksum);
-        Assert.Equal(first.Header.AgentCount, second.Header.AgentCount);
-        Assert.Equal(firstJson, secondJson);
+            runner.RunEpisode(
+                brain,
+                12345,
+                60,
+                2,
+                captureSnapshots: true,
+                snapshotEveryNTicks: snapshotEvery,
+                snapshotsOutDir: outDir);
+            string secondJson = ReadSnapshotJson(outDir, snapshotEvery);
+            WorldSnapshot second = SnapshotJson.Deserialize(secondJson);
+
+            Assert.Equal(first.Header.WorldChecksum, second.Header.WorldChecksum);
+            Assert.Equal(first.Header.AgentCount, second.Header.AgentCount);
+            Assert.Equal(firstJson, secondJson);
+        }
+        finally
+        {
+            CleanupSnapshots(outDir);
+        }
     }
 
     [Fact]
@@ -36,16 +58,29 @@ public class SnapshotTests
         SimulationConfig config = CreateConfig();
         EpisodeRunner runner = new(config);
         IBrain brain = new NoOpBrain();
-        string snapshotDirectory = Path.Combine("artifacts", "snapshots");
         const int snapshotEvery = 30;
+        string outDir = CreateSnapshotDirectory();
 
-        CleanSnapshots(snapshotDirectory);
-        runner.RunEpisode(brain, 777, 60, 3, captureSnapshots: true, snapshotEveryNTicks: snapshotEvery);
+        try
+        {
+            runner.RunEpisode(
+                brain,
+                777,
+                60,
+                3,
+                captureSnapshots: true,
+                snapshotEveryNTicks: snapshotEvery,
+                snapshotsOutDir: outDir);
 
-        string json = ReadSnapshotJson(snapshotDirectory, snapshotEvery);
-        WorldSnapshot snapshot = SnapshotJson.Deserialize(json);
+            string json = ReadSnapshotJson(outDir, snapshotEvery);
+            WorldSnapshot snapshot = SnapshotJson.Deserialize(json);
 
-        Assert.Equal(snapshot.Header.AgentCount, snapshot.Agents.Count);
+            Assert.Equal(snapshot.Header.AgentCount, snapshot.Agents.Count);
+        }
+        finally
+        {
+            CleanupSnapshots(outDir);
+        }
     }
 
     private static SimulationConfig CreateConfig(float thirstRate = 0.05f, float deathGrace = 2f)
@@ -71,7 +106,14 @@ public class SnapshotTests
         return File.ReadAllText(path);
     }
 
-    private static void CleanSnapshots(string directory)
+    private static string CreateSnapshotDirectory()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "gaia2_snapshots", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        return directory;
+    }
+
+    private static void CleanupSnapshots(string directory)
     {
         if (Directory.Exists(directory))
         {
