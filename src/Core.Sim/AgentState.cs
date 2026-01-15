@@ -11,12 +11,15 @@ public sealed class AgentState
     {
         Position = position;
         LastVision = visionBuffer ?? Array.Empty<float>();
+        Direction = Vector2.Zero;
         _thirst01 = 0f;
         _secondsAtMaxThirst = 0f;
         IsAlive = true;
     }
 
     public Vector2 Position { get; private set; }
+
+    public Vector2 Direction { get; private set; }
 
     public float[] LastVision { get; private set; }
 
@@ -96,5 +99,10 @@ public sealed class AgentState
     public void UpdateVision(float[] vision)
     {
         LastVision = vision ?? throw new ArgumentNullException(nameof(vision));
+    }
+
+    internal void UpdateDirection(Vector2 direction)
+    {
+        Direction = direction;
     }
 }

@@ -14,7 +14,15 @@ public sealed class EpisodeRunner
         _baseConfig = baseConfig;
     }
 
-    public EpisodeResult RunEpisode(IBrain brain, int seed, int ticks, int agentCount = 1)
+    public EpisodeResult RunEpisode(
+        IBrain brain,
+        int seed,
+        int ticks,
+        int agentCount = 1,
+        bool captureSnapshots = false,
+        int snapshotEveryNTicks = 0,
+        string? snapshotsOutDir = null,
+        bool stopEarlyWhenAllAgentsDead = true)
     {
         if (brain is null)
         {
@@ -38,10 +46,26 @@ public sealed class EpisodeRunner
         };
 
         Simulation simulation = new(config, agentCount);
-        return RunEpisodeInternal(brain, seed, ticks, simulation);
+        return RunEpisodeInternal(
+            brain,
+            seed,
+            ticks,
+            simulation,
+            captureSnapshots,
+            snapshotEveryNTicks,
+            snapshotsOutDir,
+            stopEarlyWhenAllAgentsDead);
     }
 
-    public EpisodeResult RunEpisode(IBrain brain, int seed, int ticks, IReadOnlyList<Vector2> initialAgentPositions)
+    public EpisodeResult RunEpisode(
+        IBrain brain,
+        int seed,
+        int ticks,
+        IReadOnlyList<Vector2> initialAgentPositions,
+        bool captureSnapshots = false,
+        int snapshotEveryNTicks = 0,
+        string? snapshotsOutDir = null,
+        bool stopEarlyWhenAllAgentsDead = true)
     {
         if (brain is null)
         {
@@ -70,10 +94,26 @@ public sealed class EpisodeRunner
         };
 
         Simulation simulation = new(config, initialAgentPositions);
-        return RunEpisodeInternal(brain, seed, ticks, simulation);
+        return RunEpisodeInternal(
+            brain,
+            seed,
+            ticks,
+            simulation,
+            captureSnapshots,
+            snapshotEveryNTicks,
+            snapshotsOutDir,
+            stopEarlyWhenAllAgentsDead);
     }
 
-    private static EpisodeResult RunEpisodeInternal(IBrain brain, int seed, int ticks, Simulation simulation)
+    private static EpisodeResult RunEpisodeInternal(
+        IBrain brain,
+        int seed,
+        int ticks,
+        Simulation simulation,
+        bool captureSnapshots,
+        int snapshotEveryNTicks,
+        string? snapshotsOutDir,
+        bool stopEarlyWhenAllAgentsDead)
     {
         int ticksSurvived = 0;
         int successfulDrinks = 0;
@@ -81,10 +121,12 @@ public sealed class EpisodeRunner
         long thirstSamples = 0;
         HashSet<(int X, int Y)> visitedCells = new();
         HashSet<(int X, int Y)> drinkableCellsVisited = new();
+        List<WorldSnapshot> snapshots = captureSnapshots ? new List<WorldSnapshot>() : new List<WorldSnapshot>(0);
+        List<int> snapshotTicksWritten = captureSnapshots ? new List<int>() : new List<int>(0);
 
         TrackVisitedCells(simulation, visitedCells, drinkableCellsVisited);
 
-        for (int i = 0; i < ticks; i += 1)
+        for (int tick = 0; tick < ticks; tick += 1)
         {
             successfulDrinks += simulation.Step(brain);
             ticksSurvived += 1;
@@ -98,7 +140,13 @@ public sealed class EpisodeRunner
                 thirstSamples += 1;
             }
 
-            if (AreAllAgentsDead(simulation.Agents))
+            if (captureSnapshots && snapshotEveryNTicks > 0 && tick % snapshotEveryNTicks == 0)
+            {
+                snapshots.Add(WorldSnapshotBuilder.Build(simulation, tick));
+                snapshotTicksWritten.Add(tick);
+            }
+
+            if (stopEarlyWhenAllAgentsDead && AreAllAgentsDead(simulation.Agents))
             {
                 break;
             }
@@ -127,6 +175,12 @@ public sealed class EpisodeRunner
         ulong agentsChecksum = SimulationChecksum.Compute(simulation.Agents, simulation.Tick);
         ulong totalChecksum = SimulationChecksum.Combine(worldChecksum, agentsChecksum);
 
+        if (captureSnapshots && snapshotEveryNTicks > 0 && snapshots.Count > 0)
+        {
+            string snapshotsDirectory = snapshotsOutDir ?? Path.Combine("artifacts", "snapshots");
+            SnapshotJson.WriteSnapshots(snapshotsDirectory, snapshots);
+        }
+
         return new EpisodeResult(
             seed,
             ticks,
@@ -139,7 +193,14 @@ public sealed class EpisodeRunner
             exploreScore,
             drinkableExploreScore,
             fitness,
-            totalChecksum);
+            totalChecksum,
+            captureSnapshots ? snapshotTicksWritten : null)
+        {
+            Snapshots = captureSnapshots ? snapshots : Array.Empty<WorldSnapshot>(),
+            SnapshotsEnabled = captureSnapshots,
+            SnapshotEveryNTicks = snapshotEveryNTicks,
+            SnapshotCount = snapshots.Count
+        };
     }
 
     private static bool AreAllAgentsDead(IReadOnlyList<AgentState> agents)
