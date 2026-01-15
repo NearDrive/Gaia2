@@ -26,6 +26,8 @@ public class EpisodeRunnerTests
         EpisodeResult second = runner.RunEpisode(brain, 12345, 250, 1);
 
         Assert.Equal(first.Fitness, second.Fitness);
+        Assert.Equal(first.VisitedCells, second.VisitedCells);
+        Assert.Equal(first.DrinkableCellsVisited, second.DrinkableCellsVisited);
     }
 
     [Fact]
@@ -55,6 +57,37 @@ public class EpisodeRunnerTests
         _output.WriteLine($"Good: Ticks={rGood.TicksSurvived} Drinks={rGood.SuccessfulDrinks} Thirst={rGood.AvgThirst01:0.000000} Fitness={rGood.Fitness:0.000}");
 
         Assert.True(rGood.Fitness > rBad.Fitness);
+    }
+
+    [Fact]
+    public void ExplorationScore_Increases_WhenVisitingNewCells()
+    {
+        SimulationConfig config = CreateConfig(thirstRate: 0f, deathGrace: 100f);
+        EpisodeRunner runner = new(config);
+        Vector2 startPosition = new(1.5f, 1.5f);
+
+        EpisodeResult stationary = runner.RunEpisode(new StationaryBrain(), 7, 20, new[] { startPosition });
+        EpisodeResult explorer = runner.RunEpisode(new StraightLineBrain(), 7, 20, new[] { startPosition });
+
+        _output.WriteLine($"Stationary Visited={stationary.VisitedCells} Explorer Visited={explorer.VisitedCells}");
+
+        Assert.True(explorer.VisitedCells > stationary.VisitedCells);
+    }
+
+    [Fact]
+    public void Fitness_StillRewardsSurvival_MoreThanExploration()
+    {
+        SimulationConfig config = CreateConfig(thirstRate: 0.5f, deathGrace: 0.5f);
+        EpisodeRunner runner = new(config);
+        Vector2 startPosition = FindWaterStart(config, 15);
+
+        EpisodeResult explorer = runner.RunEpisode(new StraightLineBrain(), 15, 50, new[] { startPosition });
+        EpisodeResult survivor = runner.RunEpisode(new AlwaysDrinkBrain(), 15, 50, new[] { startPosition });
+
+        _output.WriteLine($"Explorer: Ticks={explorer.TicksSurvived} Visited={explorer.VisitedCells} Fitness={explorer.Fitness:0.000}");
+        _output.WriteLine($"Survivor: Ticks={survivor.TicksSurvived} Visited={survivor.VisitedCells} Fitness={survivor.Fitness:0.000}");
+
+        Assert.True(survivor.Fitness > explorer.Fitness);
     }
 
     [Fact]
@@ -116,6 +149,25 @@ public class EpisodeRunnerTests
             return new BrainOutput
             {
                 ActionDrinkScore = 1f
+            };
+        }
+    }
+
+    private sealed class StationaryBrain : IBrain
+    {
+        public BrainOutput DecideAction(BrainInput input)
+        {
+            return new BrainOutput();
+        }
+    }
+
+    private sealed class StraightLineBrain : IBrain
+    {
+        public BrainOutput DecideAction(BrainInput input)
+        {
+            return new BrainOutput
+            {
+                MoveX = 1f
             };
         }
     }

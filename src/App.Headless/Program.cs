@@ -21,7 +21,8 @@ internal static class Program
     internal const string TrainLogHeader =
         "run_id,generation,population,episodes_per_genome,ticks_per_episode," +
         "best_fitness,mean_fitness,worst_fitness,best_ticks_survived,best_successful_drinks," +
-        "best_avg_thirst,best_distance_traveled,best_nodes,best_connections";
+        "best_avg_thirst,best_distance_traveled,best_visited_cells,best_drinkable_cells_visited," +
+        "mean_visited_cells,best_nodes,best_connections";
 
     public static int Main(string[] args)
     {
@@ -69,7 +70,7 @@ internal static class Program
             EpisodeRunner runner = new(config);
             IBrain brain = CreateBrain(options.Brain);
 
-            Console.WriteLine("Seed,TicksSurvived,SuccessfulDrinks,AvgThirst01,Fitness,Checksum");
+            Console.WriteLine("Seed,TicksSurvived,SuccessfulDrinks,VisitedCells,DrinkableCellsVisited,AvgThirst01,Fitness,Checksum");
 
             double fitnessSum = 0.0;
             double minFitness = double.MaxValue;
@@ -85,6 +86,8 @@ internal static class Program
                     result.Seed.ToString(CultureInfo.InvariantCulture),
                     result.TicksSurvived.ToString(CultureInfo.InvariantCulture),
                     result.SuccessfulDrinks.ToString(CultureInfo.InvariantCulture),
+                    result.VisitedCells.ToString(CultureInfo.InvariantCulture),
+                    result.DrinkableCellsVisited.ToString(CultureInfo.InvariantCulture),
                     result.AvgThirst01.ToString("0.000000", CultureInfo.InvariantCulture),
                     result.Fitness.ToString("0.000", CultureInfo.InvariantCulture),
                     result.Checksum.ToString(CultureInfo.InvariantCulture)));
@@ -654,6 +657,9 @@ internal static class Program
             result.BestSuccessfulDrinks.ToString(CultureInfo.InvariantCulture),
             quantizedAvgThirst.ToString("0.000", CultureInfo.InvariantCulture),
             result.BestDistanceTraveled.ToString("0.000", CultureInfo.InvariantCulture),
+            result.BestVisitedCells.ToString(CultureInfo.InvariantCulture),
+            result.BestDrinkableCellsVisited.ToString(CultureInfo.InvariantCulture),
+            result.MeanVisitedCells.ToString("0.000", CultureInfo.InvariantCulture),
             result.BestGenomeNodeCount.ToString(CultureInfo.InvariantCulture),
             result.BestGenomeConnectionCount.ToString(CultureInfo.InvariantCulture));
 
