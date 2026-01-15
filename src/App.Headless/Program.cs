@@ -85,7 +85,13 @@ internal static class Program
             for (int episode = 0; episode < options.Episodes; episode += 1)
             {
                 int seed = options.Seed + episode;
-                EpisodeResult result = runner.RunEpisode(brain, seed, options.Ticks, 1);
+                EpisodeResult result = runner.RunEpisode(
+                    brain,
+                    seed,
+                    options.Ticks,
+                    1,
+                    options.Snapshots,
+                    options.SnapshotEvery);
                 Console.WriteLine(string.Join(
                     ",",
                     result.Seed.ToString(CultureInfo.InvariantCulture),
@@ -137,6 +143,8 @@ internal static class Program
         string comparePathB = string.Empty;
         string genomePath = string.Empty;
         string scenariosPath = "default";
+        bool snapshots = false;
+        int? snapshotEvery = null;
 
         for (int i = 0; i < args.Length; i += 1)
         {
@@ -183,6 +191,12 @@ internal static class Program
                     break;
                 case "--scenarios":
                     scenariosPath = ParseStringValue(args, ref i, "--scenarios");
+                    break;
+                case "--snapshots":
+                    snapshots = true;
+                    break;
+                case "--snapshot-every":
+                    snapshotEvery = ParseIntValue(args, ref i, "--snapshot-every");
                     break;
                 case "--a":
                     comparePathA = ParseStringValue(args, ref i, "--a");
@@ -235,6 +249,21 @@ internal static class Program
             throw new ArgumentOutOfRangeException(nameof(episodes));
         }
 
+        if (snapshots && !snapshotEvery.HasValue)
+        {
+            throw new ArgumentException("Missing required --snapshot-every <int> argument when --snapshots is enabled.");
+        }
+
+        if (snapshotEvery.HasValue && snapshotEvery.Value <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(snapshotEvery), "Snapshot interval must be > 0.");
+        }
+
+        if (snapshotEvery.HasValue && !snapshots)
+        {
+            throw new ArgumentException("Missing required --snapshots flag for snapshot capture.");
+        }
+
         if (generations <= 0)
         {
             throw new ArgumentOutOfRangeException(nameof(generations));
@@ -266,6 +295,8 @@ internal static class Program
 
         int resolvedSeed = seed ?? 0;
 
+        int resolvedSnapshotEvery = snapshotEvery ?? 0;
+
         return new Options(
             resolvedSeed,
             ticks,
@@ -281,7 +312,9 @@ internal static class Program
             comparePathA,
             comparePathB,
             genomePath,
-            scenariosPath);
+            scenariosPath,
+            snapshots,
+            resolvedSnapshotEvery);
     }
 
     private static int ParseIntValue(string[] args, ref int index, string name)
@@ -735,7 +768,9 @@ internal static class Program
         string ComparePathA,
         string ComparePathB,
         string GenomePath,
-        string ScenariosPath);
+        string ScenariosPath,
+        bool Snapshots,
+        int SnapshotEvery);
 
     internal readonly record struct ManifestComparisonResult(bool Equivalent, IReadOnlyList<string> Differences);
 

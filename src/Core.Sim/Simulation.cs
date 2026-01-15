@@ -271,8 +271,15 @@ public sealed class Simulation
     {
         if (delta == Vector2.Zero)
         {
+            agent.UpdateDirection(Vector2.Zero);
             return;
         }
+
+        float magnitude = delta.Length();
+        Vector2 direction = magnitude > 0f
+            ? delta / magnitude
+            : Vector2.Zero;
+        agent.UpdateDirection(direction);
 
         Vector2 start = agent.Position;
         if (agent.TryApplyDelta(World, delta))

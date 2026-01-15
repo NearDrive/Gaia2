@@ -14,7 +14,13 @@ public sealed class EpisodeRunner
         _baseConfig = baseConfig;
     }
 
-    public EpisodeResult RunEpisode(IBrain brain, int seed, int ticks, int agentCount = 1)
+    public EpisodeResult RunEpisode(
+        IBrain brain,
+        int seed,
+        int ticks,
+        int agentCount = 1,
+        bool captureSnapshots = false,
+        int snapshotEveryNTicks = 0)
     {
         if (brain is null)
         {
@@ -38,10 +44,16 @@ public sealed class EpisodeRunner
         };
 
         Simulation simulation = new(config, agentCount);
-        return RunEpisodeInternal(brain, seed, ticks, simulation);
+        return RunEpisodeInternal(brain, seed, ticks, simulation, captureSnapshots, snapshotEveryNTicks);
     }
 
-    public EpisodeResult RunEpisode(IBrain brain, int seed, int ticks, IReadOnlyList<Vector2> initialAgentPositions)
+    public EpisodeResult RunEpisode(
+        IBrain brain,
+        int seed,
+        int ticks,
+        IReadOnlyList<Vector2> initialAgentPositions,
+        bool captureSnapshots = false,
+        int snapshotEveryNTicks = 0)
     {
         if (brain is null)
         {
@@ -70,10 +82,16 @@ public sealed class EpisodeRunner
         };
 
         Simulation simulation = new(config, initialAgentPositions);
-        return RunEpisodeInternal(brain, seed, ticks, simulation);
+        return RunEpisodeInternal(brain, seed, ticks, simulation, captureSnapshots, snapshotEveryNTicks);
     }
 
-    private static EpisodeResult RunEpisodeInternal(IBrain brain, int seed, int ticks, Simulation simulation)
+    private static EpisodeResult RunEpisodeInternal(
+        IBrain brain,
+        int seed,
+        int ticks,
+        Simulation simulation,
+        bool captureSnapshots,
+        int snapshotEveryNTicks)
     {
         int ticksSurvived = 0;
         int successfulDrinks = 0;
@@ -81,6 +99,7 @@ public sealed class EpisodeRunner
         long thirstSamples = 0;
         HashSet<(int X, int Y)> visitedCells = new();
         HashSet<(int X, int Y)> drinkableCellsVisited = new();
+        List<WorldSnapshot> snapshots = captureSnapshots ? new List<WorldSnapshot>() : new List<WorldSnapshot>(0);
 
         TrackVisitedCells(simulation, visitedCells, drinkableCellsVisited);
 
@@ -96,6 +115,11 @@ public sealed class EpisodeRunner
                 int thirstMilli = (int)MathF.Round(agent.Thirst01 * 1000f);
                 thirstSumMilli += thirstMilli;
                 thirstSamples += 1;
+            }
+
+            if (captureSnapshots && snapshotEveryNTicks > 0 && simulation.Tick % snapshotEveryNTicks == 0)
+            {
+                snapshots.Add(WorldSnapshotBuilder.Build(simulation));
             }
 
             if (AreAllAgentsDead(simulation.Agents))
@@ -126,6 +150,12 @@ public sealed class EpisodeRunner
         ulong worldChecksum = simulation.World.ComputeChecksum();
         ulong agentsChecksum = SimulationChecksum.Compute(simulation.Agents, simulation.Tick);
         ulong totalChecksum = SimulationChecksum.Combine(worldChecksum, agentsChecksum);
+
+        if (captureSnapshots && snapshotEveryNTicks > 0 && snapshots.Count > 0)
+        {
+            string snapshotsDirectory = Path.Combine("artifacts", "snapshots");
+            SnapshotJson.WriteSnapshots(snapshotsDirectory, snapshots);
+        }
 
         return new EpisodeResult(
             seed,
