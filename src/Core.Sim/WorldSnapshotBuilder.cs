@@ -6,7 +6,7 @@ namespace Core.Sim;
 
 public static class WorldSnapshotBuilder
 {
-    public static WorldSnapshot Build(Simulation simulation)
+    public static WorldSnapshot Build(Simulation simulation, int tick)
     {
         if (simulation is null)
         {
@@ -38,7 +38,7 @@ public static class WorldSnapshotBuilder
 
         SnapshotHeader header = new()
         {
-            Tick = simulation.Tick,
+            Tick = tick,
             WorldWidth = simulation.Config.WorldWidth,
             WorldHeight = simulation.Config.WorldHeight,
             AgentCount = agents.Count,

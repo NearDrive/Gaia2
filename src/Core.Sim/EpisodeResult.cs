@@ -12,4 +12,5 @@ public readonly record struct EpisodeResult(
     double ExplorationScore,
     double DrinkableExplorationScore,
     double Fitness,
-    ulong Checksum);
+    ulong Checksum,
+    IReadOnlyList<int>? SnapshotTicksWritten = null);

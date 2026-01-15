@@ -12,7 +12,8 @@ public class SnapshotTests
         SimulationConfig config = CreateConfig();
         EpisodeRunner runner = new(config);
         IBrain brain = new NoOpBrain();
-        const int snapshotEvery = 50;
+        const int snapshotEvery = 10;
+        const int snapshotTick = 50;
         string outDir = CreateSnapshotDirectory();
 
         try
@@ -25,7 +26,7 @@ public class SnapshotTests
                 captureSnapshots: true,
                 snapshotEveryNTicks: snapshotEvery,
                 snapshotsOutDir: outDir);
-            string firstJson = ReadSnapshotJson(outDir, snapshotEvery);
+            string firstJson = ReadSnapshotJson(outDir, snapshotTick);
             WorldSnapshot first = SnapshotJson.Deserialize(firstJson);
 
             Directory.Delete(outDir, true);
@@ -39,7 +40,7 @@ public class SnapshotTests
                 captureSnapshots: true,
                 snapshotEveryNTicks: snapshotEvery,
                 snapshotsOutDir: outDir);
-            string secondJson = ReadSnapshotJson(outDir, snapshotEvery);
+            string secondJson = ReadSnapshotJson(outDir, snapshotTick);
             WorldSnapshot second = SnapshotJson.Deserialize(secondJson);
 
             Assert.Equal(first.Header.WorldChecksum, second.Header.WorldChecksum);
@@ -58,7 +59,8 @@ public class SnapshotTests
         SimulationConfig config = CreateConfig();
         EpisodeRunner runner = new(config);
         IBrain brain = new NoOpBrain();
-        const int snapshotEvery = 30;
+        const int snapshotEvery = 10;
+        const int snapshotTick = 30;
         string outDir = CreateSnapshotDirectory();
 
         try
@@ -72,7 +74,7 @@ public class SnapshotTests
                 snapshotEveryNTicks: snapshotEvery,
                 snapshotsOutDir: outDir);
 
-            string json = ReadSnapshotJson(outDir, snapshotEvery);
+            string json = ReadSnapshotJson(outDir, snapshotTick);
             WorldSnapshot snapshot = SnapshotJson.Deserialize(json);
 
             Assert.Equal(snapshot.Header.AgentCount, snapshot.Agents.Count);

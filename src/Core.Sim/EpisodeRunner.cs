@@ -103,10 +103,11 @@ public sealed class EpisodeRunner
         HashSet<(int X, int Y)> visitedCells = new();
         HashSet<(int X, int Y)> drinkableCellsVisited = new();
         List<WorldSnapshot> snapshots = captureSnapshots ? new List<WorldSnapshot>() : new List<WorldSnapshot>(0);
+        List<int> snapshotTicksWritten = captureSnapshots ? new List<int>() : new List<int>(0);
 
         TrackVisitedCells(simulation, visitedCells, drinkableCellsVisited);
 
-        for (int i = 0; i < ticks; i += 1)
+        for (int tick = 0; tick < ticks; tick += 1)
         {
             successfulDrinks += simulation.Step(brain);
             ticksSurvived += 1;
@@ -120,9 +121,10 @@ public sealed class EpisodeRunner
                 thirstSamples += 1;
             }
 
-            if (captureSnapshots && snapshotEveryNTicks > 0 && simulation.Tick % snapshotEveryNTicks == 0)
+            if (captureSnapshots && snapshotEveryNTicks > 0 && tick % snapshotEveryNTicks == 0)
             {
-                snapshots.Add(WorldSnapshotBuilder.Build(simulation));
+                snapshots.Add(WorldSnapshotBuilder.Build(simulation, tick));
+                snapshotTicksWritten.Add(tick);
             }
 
             if (AreAllAgentsDead(simulation.Agents))
@@ -172,7 +174,8 @@ public sealed class EpisodeRunner
             exploreScore,
             drinkableExploreScore,
             fitness,
-            totalChecksum);
+            totalChecksum,
+            captureSnapshots ? snapshotTicksWritten : null);
     }
 
     private static bool AreAllAgentsDead(IReadOnlyList<AgentState> agents)
