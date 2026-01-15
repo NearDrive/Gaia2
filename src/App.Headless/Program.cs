@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text.Json;
 using Core.Evo;
 using Core.Sim;
 
@@ -108,6 +107,7 @@ internal static class Program
         int population = 64;
         RunMode mode = RunMode.Sim;
         string brain = "none";
+        string resumePath = Path.Combine("artifacts", "checkpoint.json");
 
         for (int i = 0; i < args.Length; i += 1)
         {
@@ -139,6 +139,9 @@ internal static class Program
                     break;
                 case "--population":
                     population = ParseIntValue(args, ref i, "--population");
+                    break;
+                case "--resume":
+                    resumePath = ParseStringValue(args, ref i, "--resume");
                     break;
                 default:
                     throw new ArgumentException($"Unknown argument '{arg}'.");
@@ -200,7 +203,7 @@ internal static class Program
             throw new ArgumentException("Missing required --brain <none|neat> argument for episode mode.");
         }
 
-        return new Options(seed!.Value, ticks, agents, mode, brain, episodes, generations, population);
+        return new Options(seed!.Value, ticks, agents, mode, brain, episodes, generations, population, resumePath);
     }
 
     private static int ParseIntValue(string[] args, ref int index, string name)
@@ -290,33 +293,55 @@ internal static class Program
 
     private static void RunTraining(Options options, SimulationConfig simConfig)
     {
-        EvolutionConfig evoConfig = new(
-            options.Population,
-            eliteCount: 4,
-            mutationRate: 0.8,
-            addConnectionRate: 0.1,
-            addNodeRate: 0.03,
-            weightPerturbRate: 0.8,
-            weightResetRate: 0.1,
-            maxNodes: 64,
-            maxConnections: 256);
+        Directory.CreateDirectory("artifacts");
+
+        EvolutionConfig evoConfig;
+        Population population;
+        EvoRng rng;
+
+        if (File.Exists(options.ResumePath))
+        {
+            PopulationSnapshot snapshot = LoadCheckpoint(options.ResumePath);
+            evoConfig = snapshot.Config;
+            population = snapshot.Population;
+            rng = new EvoRng(snapshot.RngState);
+            Console.WriteLine($"Resuming from gen {population.Generation}");
+        }
+        else
+        {
+            evoConfig = new EvolutionConfig(
+                options.Population,
+                eliteCount: 4,
+                mutationRate: 0.8,
+                addConnectionRate: 0.1,
+                addNodeRate: 0.03,
+                weightPerturbRate: 0.8,
+                weightResetRate: 0.1,
+                maxNodes: 64,
+                maxConnections: 256);
+
+            Evolver freshEvolver = new(evoConfig);
+            int inputCount = (simConfig.AgentVisionRays * 3) + 1;
+            int outputCount = 1;
+            population = freshEvolver.CreateInitialPopulation(
+                options.Seed,
+                options.Population,
+                inputCount,
+                outputCount);
+            rng = new EvoRng(options.Seed);
+            Console.WriteLine("Starting new run");
+        }
 
         Evolver evolver = new(evoConfig);
-        int inputCount = (simConfig.AgentVisionRays * 3) + 1;
-        int outputCount = 1;
-        Population population = evolver.CreateInitialPopulation(
-            options.Seed,
-            options.Population,
-            inputCount,
-            outputCount);
+        evolver.RestoreStateFromPopulation(population);
 
         Trainer trainer = new();
-        Directory.CreateDirectory("artifacts");
         Genome? bestOverall = null;
         double bestOverallFitness = double.MinValue;
 
-        for (int gen = 0; gen < options.Generations; gen += 1)
+        while (population.Generation < options.Generations)
         {
+            int gen = population.Generation;
             int baseSeed = options.Seed + (gen * 10000);
             GenerationResult result = trainer.RunGeneration(
                 population,
@@ -338,11 +363,12 @@ internal static class Program
 
             if (bestGenome is not null)
             {
-                string generationPath = Path.Combine("artifacts", $"best_gen_gen{result.Generation}.json");
+                string generationPath = Path.Combine("artifacts", $"best_gen_{result.Generation:000}.json");
                 WriteGenomeJson(bestGenome, generationPath);
             }
 
-            population = evolver.NextGeneration(population, result.Fitnesses, options.Seed + gen + 1);
+            population = evolver.NextGeneration(population, result.Fitnesses, rng);
+            WriteCheckpoint(population, evoConfig, rng.GetState(), options.ResumePath);
         }
 
         if (bestOverall is not null)
@@ -354,22 +380,26 @@ internal static class Program
 
     private static void WriteGenomeJson(Genome genome, string path)
     {
-        JsonSerializerOptions options = new()
-        {
-            WriteIndented = true
-        };
-
-        GenomeDto dto = new(
-            genome.Nodes.Select(node => new NodeDto(node.Id, node.Type)).ToList(),
-            genome.Connections.Select(connection => new ConnectionDto(
-                connection.InNodeId,
-                connection.OutNodeId,
-                connection.Weight,
-                connection.Enabled,
-                connection.InnovationId)).ToList());
-
-        string json = JsonSerializer.Serialize(dto, options);
+        string json = GenomeJson.Serialize(genome);
         File.WriteAllText(path, json);
+    }
+
+    private static void WriteCheckpoint(Population population, EvolutionConfig config, RngState rngState, string path)
+    {
+        string? directory = Path.GetDirectoryName(path);
+        if (!string.IsNullOrWhiteSpace(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        string json = PopulationJson.Serialize(population, config, rngState);
+        File.WriteAllText(path, json);
+    }
+
+    private static PopulationSnapshot LoadCheckpoint(string path)
+    {
+        string json = File.ReadAllText(path);
+        return PopulationJson.Deserialize(json);
     }
 
     private enum RunMode
@@ -387,7 +417,8 @@ internal static class Program
         string Brain,
         int Episodes,
         int Generations,
-        int Population);
+        int Population,
+        string ResumePath);
 
     private sealed class NoneBrain : IBrain
     {
@@ -415,9 +446,4 @@ internal static class Program
         }
     }
 
-    private sealed record GenomeDto(IReadOnlyList<NodeDto> Nodes, IReadOnlyList<ConnectionDto> Connections);
-
-    private sealed record NodeDto(int Id, NodeType Type);
-
-    private sealed record ConnectionDto(int InNodeId, int OutNodeId, double Weight, bool Enabled, int InnovationId);
 }
