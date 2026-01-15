@@ -75,6 +75,12 @@ public sealed class Evolver
 
     public Population NextGeneration(Population current, IReadOnlyList<double> fitnesses, int seed)
     {
+        EvoRng rng = new(seed);
+        return NextGeneration(current, fitnesses, rng);
+    }
+
+    public Population NextGeneration(Population current, IReadOnlyList<double> fitnesses, EvoRng rng)
+    {
         if (current is null)
         {
             throw new ArgumentNullException(nameof(current));
@@ -89,8 +95,6 @@ public sealed class Evolver
         {
             throw new ArgumentException("Fitness list must match genome count.", nameof(fitnesses));
         }
-
-        EvoRng rng = new(seed);
 
         List<(int Index, double Fitness)> scored = new(current.Genomes.Count);
         for (int i = 0; i < current.Genomes.Count; i += 1)
@@ -126,6 +130,45 @@ public sealed class Evolver
         }
 
         return new Population(nextGen, current.Generation + 1);
+    }
+
+    public void RestoreStateFromPopulation(Population population)
+    {
+        if (population is null)
+        {
+            throw new ArgumentNullException(nameof(population));
+        }
+
+        _innovationIds.Clear();
+        _nextInnovationId = 0;
+        _nextNodeId = 0;
+
+        foreach (Genome genome in population.Genomes)
+        {
+            foreach (NodeGene node in genome.Nodes)
+            {
+                _nextNodeId = Math.Max(_nextNodeId, node.Id + 1);
+            }
+
+            foreach (ConnectionGene connection in genome.Connections)
+            {
+                (int InNodeId, int OutNodeId) key = (connection.InNodeId, connection.OutNodeId);
+                if (_innovationIds.TryGetValue(key, out int existing))
+                {
+                    if (existing != connection.InnovationId)
+                    {
+                        throw new InvalidOperationException(
+                            $"Conflicting innovation ids for ({connection.InNodeId},{connection.OutNodeId}).");
+                    }
+                }
+                else
+                {
+                    _innovationIds[key] = connection.InnovationId;
+                }
+
+                _nextInnovationId = Math.Max(_nextInnovationId, connection.InnovationId + 1);
+            }
+        }
     }
 
     private void Mutate(Genome genome, EvoRng rng)

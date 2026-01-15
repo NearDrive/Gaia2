@@ -9,6 +9,21 @@ public sealed class EvoRng
         _state = (ulong)seed;
     }
 
+    public EvoRng(RngState state)
+    {
+        _state = state.State;
+    }
+
+    public RngState GetState()
+    {
+        return new RngState(_state);
+    }
+
+    public void RestoreState(RngState state)
+    {
+        _state = state.State;
+    }
+
     public ulong NextUInt64()
     {
         _state += 0x9E3779B97F4A7C15UL;
