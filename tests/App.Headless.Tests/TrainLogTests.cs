@@ -103,6 +103,7 @@ public class TrainLogTests
         Assert.Equal(sequential.WorstFitness, parallel.WorstFitness);
         Assert.Equal(sequential.BestGenomeIndex, parallel.BestGenomeIndex);
         Assert.Equal(sequential.Fitnesses, parallel.Fitnesses);
+        Assert.Equal(sequential.RawFitnesses, parallel.RawFitnesses);
     }
 
     private static byte[] RunTrainingInTempDir(
@@ -154,7 +155,9 @@ public class TrainLogTests
             Population: population,
             ResumePath: Path.Combine("artifacts", "checkpoint.json"),
             Parallel: parallel,
-            MaxDegree: maxDegree);
+            MaxDegree: maxDegree,
+            ComparePathA: string.Empty,
+            ComparePathB: string.Empty);
 
         Program.RunTraining(options, simConfig);
     }

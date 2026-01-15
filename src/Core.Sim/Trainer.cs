@@ -45,6 +45,7 @@ public sealed class Trainer
 
         int genomeCount = pop.Genomes.Count;
         double[] fitnesses = new double[genomeCount];
+        double[] rawFitnesses = new double[genomeCount];
         double[] avgTicksSurvived = new double[genomeCount];
         double[] avgSuccessfulDrinks = new double[genomeCount];
         float[] avgThirst01 = new float[genomeCount];
@@ -75,6 +76,7 @@ public sealed class Trainer
                 + (ComplexityConnectionPenalty * genome.ConnectionCount);
             double adjustedFitness = rawFitness - penalty;
             fitnesses[i] = adjustedFitness;
+            rawFitnesses[i] = rawFitness;
             avgTicksSurvived[i] = ticksSurvivedSum / episodesPerGenome;
             avgSuccessfulDrinks[i] = successfulDrinksSum / episodesPerGenome;
             avgThirst01[i] = (float)(avgThirstSum / episodesPerGenome);
@@ -96,8 +98,8 @@ public sealed class Trainer
         }
 
         double totalFitness = 0.0;
-        double bestFitness = double.MinValue;
         double worstFitness = double.MaxValue;
+        double bestFitness = double.MinValue;
         int bestIndex = 0;
         Genome? bestGenome = null;
         int bestGenomeNodeCount = 0;
@@ -105,16 +107,25 @@ public sealed class Trainer
         int bestTicksSurvived = 0;
         int bestSuccessfulDrinks = 0;
         float bestAvgThirst = 0f;
+        GenomeFitnessScore? bestScore = null;
 
         for (int i = 0; i < genomeCount; i += 1)
         {
             double adjustedFitness = fitnesses[i];
             totalFitness += adjustedFitness;
 
-            if (adjustedFitness > bestFitness || (adjustedFitness == bestFitness && i < bestIndex))
+            GenomeFitnessScore score = new(
+                i,
+                adjustedFitness,
+                rawFitnesses[i],
+                nodeCounts[i],
+                connectionCounts[i]);
+
+            if (!bestScore.HasValue || GenomeFitnessScore.Compare(score, bestScore.Value) < 0)
             {
-                bestFitness = adjustedFitness;
-                bestIndex = i;
+                bestScore = score;
+                bestFitness = score.FitnessAdjusted;
+                bestIndex = score.Index;
                 bestGenome = pop.Genomes[i];
                 bestGenomeNodeCount = nodeCounts[i];
                 bestGenomeConnectionCount = connectionCounts[i];
@@ -142,6 +153,7 @@ public sealed class Trainer
             worstFitness,
             bestIndex,
             fitnesses,
+            rawFitnesses,
             bestGenome,
             bestGenomeNodeCount,
             bestGenomeConnectionCount,
