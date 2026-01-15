@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using Core.Evo;
 using Core.Sim;
 
@@ -15,6 +16,10 @@ internal static class Program
     private const int DefaultVisionRays = 8;
     private const float DefaultVisionRange = 10f;
     private const float DefaultVisionFov = MathF.PI / 2f;
+    internal const string TrainLogHeader =
+        "run_id,generation,population,episodes_per_genome,ticks_per_episode," +
+        "best_fitness,mean_fitness,worst_fitness,best_ticks_survived,best_successful_drinks," +
+        "best_avg_thirst,best_nodes,best_connections";
 
     public static int Main(string[] args)
     {
@@ -291,9 +296,10 @@ internal static class Program
         };
     }
 
-    private static void RunTraining(Options options, SimulationConfig simConfig)
+    internal static void RunTraining(Options options, SimulationConfig simConfig)
     {
         Directory.CreateDirectory("artifacts");
+        string logPath = Path.Combine("artifacts", "train_log.csv");
 
         EvolutionConfig evoConfig;
         Population population;
@@ -338,6 +344,11 @@ internal static class Program
         Trainer trainer = new();
         Genome? bestOverall = null;
         double bestOverallFitness = double.MinValue;
+        double? initialBestFitness = null;
+        double? finalBestFitness = null;
+        string? bestOverallPath = null;
+
+        using StreamWriter logWriter = CreateTrainLogWriter(logPath);
 
         while (population.Generation < options.Generations)
         {
@@ -357,9 +368,24 @@ internal static class Program
                 bestOverall = bestGenome;
             }
 
+            if (!initialBestFitness.HasValue)
+            {
+                initialBestFitness = result.BestFitness;
+            }
+
+            finalBestFitness = result.BestFitness;
+
             Console.WriteLine(
                 $"Gen={result.Generation} Best={result.BestFitness:0.000} Mean={result.MeanFitness:0.000} " +
                 $"Worst={result.WorstFitness:0.000} Nodes={bestGenome?.NodeCount ?? 0} Conns={bestGenome?.ConnectionCount ?? 0}");
+
+            WriteTrainLogLine(
+                logWriter,
+                runId: $"seed_{options.Seed}",
+                result,
+                population.Genomes.Count,
+                options.Episodes,
+                options.Ticks);
 
             if (bestGenome is not null)
             {
@@ -373,9 +399,18 @@ internal static class Program
 
         if (bestOverall is not null)
         {
-            string bestPath = Path.Combine("artifacts", "best.json");
-            WriteGenomeJson(bestOverall, bestPath);
+            bestOverallPath = Path.Combine("artifacts", "best.json");
+            WriteGenomeJson(bestOverall, bestOverallPath);
         }
+
+        if (initialBestFitness.HasValue && finalBestFitness.HasValue)
+        {
+            double delta = finalBestFitness.Value - initialBestFitness.Value;
+            Console.WriteLine($"BestFitness Initial={initialBestFitness.Value:0.000} Final={finalBestFitness.Value:0.000} Delta={delta:0.000}");
+        }
+
+        Console.WriteLine($"BestGenome Path={bestOverallPath ?? "none"}");
+        Console.WriteLine($"TrainLog Path={logPath}");
     }
 
     private static void WriteGenomeJson(Genome genome, string path)
@@ -402,14 +437,14 @@ internal static class Program
         return PopulationJson.Deserialize(json);
     }
 
-    private enum RunMode
+    internal enum RunMode
     {
         Sim,
         Episode,
         Train
     }
 
-    private readonly record struct Options(
+    internal readonly record struct Options(
         int Seed,
         int Ticks,
         int Agents,
@@ -419,6 +454,54 @@ internal static class Program
         int Generations,
         int Population,
         string ResumePath);
+
+    private static StreamWriter CreateTrainLogWriter(string logPath)
+    {
+        bool writeHeader = !File.Exists(logPath);
+        FileStream stream = new(
+            logPath,
+            FileMode.Append,
+            FileAccess.Write,
+            FileShare.Read);
+        StreamWriter writer = new(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+
+        if (writeHeader)
+        {
+            writer.WriteLine(TrainLogHeader);
+            writer.Flush();
+        }
+
+        return writer;
+    }
+
+    private static void WriteTrainLogLine(
+        StreamWriter writer,
+        string runId,
+        GenerationResult result,
+        int population,
+        int episodesPerGenome,
+        int ticksPerEpisode)
+    {
+        float quantizedAvgThirst = Quantize(result.BestAvgThirst01);
+        string line = string.Join(
+            ",",
+            runId,
+            result.Generation.ToString(CultureInfo.InvariantCulture),
+            population.ToString(CultureInfo.InvariantCulture),
+            episodesPerGenome.ToString(CultureInfo.InvariantCulture),
+            ticksPerEpisode.ToString(CultureInfo.InvariantCulture),
+            result.BestFitness.ToString("0.000", CultureInfo.InvariantCulture),
+            result.MeanFitness.ToString("0.000", CultureInfo.InvariantCulture),
+            result.WorstFitness.ToString("0.000", CultureInfo.InvariantCulture),
+            result.BestTicksSurvived.ToString(CultureInfo.InvariantCulture),
+            result.BestSuccessfulDrinks.ToString(CultureInfo.InvariantCulture),
+            quantizedAvgThirst.ToString("0.000", CultureInfo.InvariantCulture),
+            result.BestGenomeNodeCount.ToString(CultureInfo.InvariantCulture),
+            result.BestGenomeConnectionCount.ToString(CultureInfo.InvariantCulture));
+
+        writer.WriteLine(line);
+        writer.Flush();
+    }
 
     private sealed class NoneBrain : IBrain
     {

@@ -9,4 +9,8 @@
     <ProjectReference Include="..\Core.Evo\Core.Evo.csproj" />
     <ProjectReference Include="..\Persistence\Persistence.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="App.Headless.Tests" />
+  </ItemGroup>
 </Project>

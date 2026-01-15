@@ -41,18 +41,29 @@ public sealed class Trainer
         double worstFitness = double.MaxValue;
         int bestIndex = 0;
         Genome? bestGenome = null;
+        int bestGenomeNodeCount = 0;
+        int bestGenomeConnectionCount = 0;
+        int bestTicksSurvived = 0;
+        int bestSuccessfulDrinks = 0;
+        float bestAvgThirst01 = 0f;
 
         for (int i = 0; i < pop.Genomes.Count; i += 1)
         {
             Genome genome = pop.Genomes[i];
             IBrain brain = _brainFactory.CreateBrain(genome, inputCount, outputCount);
             double fitnessSum = 0.0;
+            double ticksSurvivedSum = 0.0;
+            double successfulDrinksSum = 0.0;
+            double avgThirstSum = 0.0;
 
             for (int episode = 0; episode < episodesPerGenome; episode += 1)
             {
                 int seed = baseSeed + (i * 1000) + episode;
                 EpisodeResult result = runner.RunEpisode(brain, seed, ticksPerEpisode, 1);
                 fitnessSum += result.Fitness;
+                ticksSurvivedSum += result.TicksSurvived;
+                successfulDrinksSum += result.SuccessfulDrinks;
+                avgThirstSum += result.AvgThirst01;
             }
 
             double rawFitness = fitnessSum / episodesPerGenome;
@@ -67,6 +78,15 @@ public sealed class Trainer
                 bestFitness = adjustedFitness;
                 bestIndex = i;
                 bestGenome = genome;
+                bestGenomeNodeCount = genome.NodeCount;
+                bestGenomeConnectionCount = genome.ConnectionCount;
+                bestTicksSurvived = (int)Math.Round(
+                    ticksSurvivedSum / episodesPerGenome,
+                    MidpointRounding.AwayFromZero);
+                bestSuccessfulDrinks = (int)Math.Round(
+                    successfulDrinksSum / episodesPerGenome,
+                    MidpointRounding.AwayFromZero);
+                bestAvgThirst01 = (float)(avgThirstSum / episodesPerGenome);
             }
 
             if (adjustedFitness < worstFitness)
@@ -84,6 +104,11 @@ public sealed class Trainer
             worstFitness,
             bestIndex,
             fitnesses,
-            bestGenome);
+            bestGenome,
+            bestGenomeNodeCount,
+            bestGenomeConnectionCount,
+            bestTicksSurvived,
+            bestSuccessfulDrinks,
+            bestAvgThirst01);
     }
 }
