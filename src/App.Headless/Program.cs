@@ -1,7 +1,10 @@
 using System.Globalization;
+using System.Text.Json;
+using Core.Evo;
 using Core.Sim;
 
 const int DefaultTicks = 10000;
+const int DefaultTrainTicks = 1000;
 const int DefaultAgents = 32;
 const float DefaultDt = 1f;
 const int DefaultWorldWidth = 32;
@@ -41,7 +44,7 @@ if (options.Mode == RunMode.Sim)
     Console.WriteLine($"AgentsChecksum: {agentsChecksum}");
     Console.WriteLine($"TotalChecksum: {totalChecksum}");
 }
-else
+else if (options.Mode == RunMode.Episode)
 {
     EpisodeRunner runner = new(config);
     IBrain brain = CreateBrain(options.Brain);
@@ -79,13 +82,21 @@ else
         Console.WriteLine($"meanFitness={meanFitness:0.000} minFitness={minFitness:0.000} maxFitness={maxFitness:0.000} meanSurvival={meanSurvival:0.000}");
     }
 }
+else
+{
+    RunTraining(options, config);
+}
 
 static Options ParseArgs(string[] args)
 {
     int? seed = null;
     int ticks = DefaultTicks;
+    bool ticksSpecified = false;
     int agents = DefaultAgents;
     int episodes = 1;
+    bool episodesSpecified = false;
+    int generations = 20;
+    int population = 64;
     RunMode mode = RunMode.Sim;
     string brain = "none";
 
@@ -102,6 +113,7 @@ static Options ParseArgs(string[] args)
                 break;
             case "--ticks":
                 ticks = ParseIntValue(args, ref i, "--ticks");
+                ticksSpecified = true;
                 break;
             case "--agents":
                 agents = ParseIntValue(args, ref i, "--agents");
@@ -111,15 +123,37 @@ static Options ParseArgs(string[] args)
                 break;
             case "--episodes":
                 episodes = ParseIntValue(args, ref i, "--episodes");
+                episodesSpecified = true;
+                break;
+            case "--generations":
+                generations = ParseIntValue(args, ref i, "--generations");
+                break;
+            case "--population":
+                population = ParseIntValue(args, ref i, "--population");
                 break;
             default:
                 throw new ArgumentException($"Unknown argument '{arg}'.");
         }
     }
 
-    if (!seed.HasValue)
+    if (!seed.HasValue && mode != RunMode.Train)
     {
         throw new ArgumentException("Missing required --seed <int> argument.");
+    }
+
+    if (!seed.HasValue && mode == RunMode.Train)
+    {
+        seed = 123;
+    }
+
+    if (mode == RunMode.Train && !ticksSpecified)
+    {
+        ticks = DefaultTrainTicks;
+    }
+
+    if (mode == RunMode.Train && !episodesSpecified)
+    {
+        episodes = 3;
     }
 
     if (ticks <= 0)
@@ -137,6 +171,16 @@ static Options ParseArgs(string[] args)
         throw new ArgumentOutOfRangeException(nameof(episodes));
     }
 
+    if (generations <= 0)
+    {
+        throw new ArgumentOutOfRangeException(nameof(generations));
+    }
+
+    if (population <= 0)
+    {
+        throw new ArgumentOutOfRangeException(nameof(population));
+    }
+
     if (mode == RunMode.Episode && episodes <= 0)
     {
         throw new ArgumentOutOfRangeException(nameof(episodes));
@@ -147,7 +191,7 @@ static Options ParseArgs(string[] args)
         throw new ArgumentException("Missing required --brain <none|neat> argument for episode mode.");
     }
 
-    return new Options(seed.Value, ticks, agents, mode, brain, episodes);
+    return new Options(seed!.Value, ticks, agents, mode, brain, episodes, generations, population);
 }
 
 static int ParseIntValue(string[] args, ref int index, string name)
@@ -185,7 +229,8 @@ static RunMode ParseModeValue(string[] args, ref int index)
     {
         "sim" => RunMode.Sim,
         "episode" => RunMode.Episode,
-        _ => throw new ArgumentException($"Invalid mode '{value}'. Use 'sim' or 'episode'.")
+        "train" => RunMode.Train,
+        _ => throw new ArgumentException($"Invalid mode '{value}'. Use 'sim', 'episode', or 'train'.")
     };
 }
 
@@ -237,7 +282,8 @@ static IBrain CreateBrain(string brain)
 enum RunMode
 {
     Sim,
-    Episode
+    Episode,
+    Train
 }
 
 readonly record struct Options(
@@ -246,7 +292,9 @@ readonly record struct Options(
     int Agents,
     RunMode Mode,
     string Brain,
-    int Episodes);
+    int Episodes,
+    int Generations,
+    int Population);
 
 sealed class NoneBrain : IBrain
 {
@@ -273,3 +321,93 @@ sealed class HeuristicBrain : IBrain
         return AgentAction.None;
     }
 }
+
+static void RunTraining(Options options, SimulationConfig simConfig)
+{
+    EvolutionConfig evoConfig = new(
+        options.Population,
+        eliteCount: 4,
+        mutationRate: 0.8,
+        addConnectionRate: 0.1,
+        addNodeRate: 0.03,
+        weightPerturbRate: 0.8,
+        weightResetRate: 0.1,
+        maxNodes: 64,
+        maxConnections: 256);
+
+    Evolver evolver = new(evoConfig);
+    int inputCount = (simConfig.AgentVisionRays * 3) + 1;
+    int outputCount = 1;
+    Population population = evolver.CreateInitialPopulation(
+        options.Seed,
+        options.Population,
+        inputCount,
+        outputCount);
+
+    Trainer trainer = new();
+    Directory.CreateDirectory("artifacts");
+    Genome? bestOverall = null;
+    double bestOverallFitness = double.MinValue;
+
+    for (int gen = 0; gen < options.Generations; gen += 1)
+    {
+        int baseSeed = options.Seed + (gen * 10000);
+        GenerationResult result = trainer.RunGeneration(
+            population,
+            baseSeed,
+            options.Episodes,
+            simConfig,
+            options.Ticks);
+
+        Genome? bestGenome = result.BestGenome;
+        if (bestGenome is not null && result.BestFitness > bestOverallFitness)
+        {
+            bestOverallFitness = result.BestFitness;
+            bestOverall = bestGenome;
+        }
+
+        Console.WriteLine(
+            $"Gen={result.Generation} Best={result.BestFitness:0.000} Mean={result.MeanFitness:0.000} " +
+            $"Worst={result.WorstFitness:0.000} Nodes={bestGenome?.NodeCount ?? 0} Conns={bestGenome?.ConnectionCount ?? 0}");
+
+        if (bestGenome is not null)
+        {
+            string generationPath = Path.Combine("artifacts", $"best_gen_gen{result.Generation}.json");
+            WriteGenomeJson(bestGenome, generationPath);
+        }
+
+        population = evolver.NextGeneration(population, result.Fitnesses, options.Seed + gen + 1);
+    }
+
+    if (bestOverall is not null)
+    {
+        string bestPath = Path.Combine("artifacts", "best.json");
+        WriteGenomeJson(bestOverall, bestPath);
+    }
+}
+
+static void WriteGenomeJson(Genome genome, string path)
+{
+    JsonSerializerOptions options = new()
+    {
+        WriteIndented = true
+    };
+
+    GenomeDto dto = new(
+        genome.Nodes.Select(node => new NodeDto(node.Id, node.Type)).ToList(),
+        genome.Connections.Select(connection => new ConnectionDto(
+            connection.InNodeId,
+            connection.OutNodeId,
+            connection.Weight,
+            connection.Enabled,
+            connection.InnovationId)).ToList());
+
+    string json = JsonSerializer.Serialize(dto, options);
+    File.WriteAllText(path, json);
+}
+
+sealed record GenomeDto(IReadOnlyList<NodeDto> Nodes, IReadOnlyList<ConnectionDto> Connections);
+
+sealed record NodeDto(int Id, NodeType Type);
+
+sealed record ConnectionDto(int InNodeId, int OutNodeId, double Weight, bool Enabled, int InnovationId);
