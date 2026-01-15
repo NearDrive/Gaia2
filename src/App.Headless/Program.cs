@@ -47,7 +47,11 @@ internal static class Program
             DefaultAgentMaxSpeed,
             DefaultMoveDeadzone);
 
-        if (options.Mode == RunMode.Sim)
+        if (options.Mode == RunMode.Benchmark)
+        {
+            RunBenchmark(options, config);
+        }
+        else if (options.Mode == RunMode.Sim)
         {
             Simulation simulation = new(config, options.Agents);
             simulation.Run(options.Ticks);
@@ -131,6 +135,8 @@ internal static class Program
         string resumePath = Path.Combine("artifacts", "checkpoint.json");
         string comparePathA = string.Empty;
         string comparePathB = string.Empty;
+        string genomePath = string.Empty;
+        string scenariosPath = "default";
 
         for (int i = 0; i < args.Length; i += 1)
         {
@@ -172,6 +178,12 @@ internal static class Program
                 case "--maxDegree":
                     maxDegree = ParseIntValue(args, ref i, "--maxDegree");
                     break;
+                case "--genome":
+                    genomePath = ParseStringValue(args, ref i, "--genome");
+                    break;
+                case "--scenarios":
+                    scenariosPath = ParseStringValue(args, ref i, "--scenarios");
+                    break;
                 case "--a":
                     comparePathA = ParseStringValue(args, ref i, "--a");
                     break;
@@ -183,7 +195,7 @@ internal static class Program
             }
         }
 
-        if (!seed.HasValue && mode != RunMode.Train && mode != RunMode.Compare)
+        if (!seed.HasValue && mode != RunMode.Train && mode != RunMode.Compare && mode != RunMode.Benchmark)
         {
             throw new ArgumentException("Missing required --seed <int> argument.");
         }
@@ -267,7 +279,9 @@ internal static class Program
             parallel,
             resolvedMaxDegree,
             comparePathA,
-            comparePathB);
+            comparePathB,
+            genomePath,
+            scenariosPath);
     }
 
     private static int ParseIntValue(string[] args, ref int index, string name)
@@ -307,7 +321,8 @@ internal static class Program
             "episode" => RunMode.Episode,
             "train" => RunMode.Train,
             "compare" => RunMode.Compare,
-            _ => throw new ArgumentException($"Invalid mode '{value}'. Use 'sim', 'episode', 'train', or 'compare'.")
+            "benchmark" => RunMode.Benchmark,
+            _ => throw new ArgumentException($"Invalid mode '{value}'. Use 'sim', 'episode', 'train', 'compare', or 'benchmark'.")
         };
     }
 
@@ -365,6 +380,23 @@ internal static class Program
             "neat" => new HeuristicBrain(),
             _ => throw new ArgumentException($"Unknown brain '{brain}'. Use 'none' or 'neat'.")
         };
+    }
+
+    private static IBrain CreateGenomeBrain(string genomePath, SimulationConfig simConfig)
+    {
+        if (!File.Exists(genomePath))
+        {
+            throw new FileNotFoundException($"Genome file not found: {genomePath}");
+        }
+
+        string json = File.ReadAllText(genomePath);
+        Genome genome = GenomeJson.Deserialize(json);
+
+        int inputCount = (simConfig.AgentVisionRays * 3) + 2;
+        int outputCount = 3;
+
+        GenomeBrainFactory factory = new();
+        return factory.CreateBrain(genome, inputCount, outputCount);
     }
 
     private static CurriculumSchedule CreateDefaultCurriculum(Options options, SimulationConfig simConfig)
@@ -633,12 +665,59 @@ internal static class Program
         RunManifestJson.Write(manifestPath, manifest);
     }
 
+    private static IReadOnlyList<Scenario> ResolveScenarios(string scenariosPath)
+    {
+        if (string.Equals(scenariosPath, "default", StringComparison.OrdinalIgnoreCase))
+        {
+            return BenchmarkScenarios.Default;
+        }
+
+        if (!File.Exists(scenariosPath))
+        {
+            throw new FileNotFoundException($"Scenario file not found: {scenariosPath}");
+        }
+
+        return ScenarioJson.Read(scenariosPath);
+    }
+
+    private static IBrain ResolveBenchmarkBrain(Options options, SimulationConfig simConfig)
+    {
+        if (!string.Equals(options.Brain, "none", StringComparison.Ordinal))
+        {
+            return CreateBrain(options.Brain);
+        }
+
+        string genomePath = string.IsNullOrWhiteSpace(options.GenomePath)
+            ? Path.Combine("artifacts", "best.json")
+            : options.GenomePath;
+
+        return CreateGenomeBrain(genomePath, simConfig);
+    }
+
+    internal static void RunBenchmark(Options options, SimulationConfig simConfig)
+    {
+        Directory.CreateDirectory("artifacts");
+
+        IReadOnlyList<Scenario> scenarios = ResolveScenarios(options.ScenariosPath);
+        IBrain brain = ResolveBenchmarkBrain(options, simConfig);
+
+        BenchmarkRunner runner = new(simConfig);
+        BenchmarkReport report = runner.Run(brain, scenarios);
+
+        string reportPath = Path.Combine("artifacts", "benchmark_report.json");
+        BenchmarkReportJson.Write(reportPath, report);
+
+        string csvPath = Path.Combine("artifacts", "benchmark.csv");
+        BenchmarkCsvWriter.Write(csvPath, report);
+    }
+
     internal enum RunMode
     {
         Sim,
         Episode,
         Train,
-        Compare
+        Compare,
+        Benchmark
     }
 
     internal readonly record struct Options(
@@ -654,7 +733,9 @@ internal static class Program
         bool Parallel,
         int MaxDegree,
         string ComparePathA,
-        string ComparePathB);
+        string ComparePathB,
+        string GenomePath,
+        string ScenariosPath);
 
     internal readonly record struct ManifestComparisonResult(bool Equivalent, IReadOnlyList<string> Differences);
 

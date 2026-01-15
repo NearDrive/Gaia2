@@ -93,7 +93,9 @@ public class RunManifestTests
             Parallel: false,
             MaxDegree: 0,
             ComparePathA: string.Empty,
-            ComparePathB: string.Empty);
+            ComparePathB: string.Empty,
+            GenomePath: string.Empty,
+            ScenariosPath: "default");
 
         Program.RunTraining(options, simConfig);
     }

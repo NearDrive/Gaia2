@@ -158,7 +158,9 @@ public class TrainLogTests
             Parallel: parallel,
             MaxDegree: maxDegree,
             ComparePathA: string.Empty,
-            ComparePathB: string.Empty);
+            ComparePathB: string.Empty,
+            GenomePath: string.Empty,
+            ScenariosPath: "default");
 
         Program.RunTraining(options, simConfig);
     }
