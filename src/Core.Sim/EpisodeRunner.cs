@@ -113,7 +113,7 @@ public sealed class EpisodeRunner
 
         for (int i = 0; i < ticks; i += 1)
         {
-            BrainOutput output = new();
+            BrainOutput output = default;
             int stepDrinks;
 
             if (captureReplay)
@@ -149,7 +149,7 @@ public sealed class EpisodeRunner
                     Alive = agent.IsAlive,
                     OutMoveX = output.MoveX,
                     OutMoveY = output.MoveY,
-                    OutDrink = output.ActionDrinkScore,
+                    OutDrink = output.Drink01,
                     SuccessfulDrinksTotal = successfulDrinks,
                     VisitedCells = visitedCells.Count
                 });

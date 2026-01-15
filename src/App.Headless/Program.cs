@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Core.Evo;
 using Core.Sim;
+using SimBrainOutput = Core.Sim.BrainOutput;
 
 namespace App.Headless;
 
@@ -911,22 +912,18 @@ internal static class Program
 
     private sealed class NoneBrain : IBrain
     {
-        public BrainOutput DecideAction(BrainInput input)
+        public SimBrainOutput DecideAction(BrainInput input)
         {
-            return new BrainOutput();
+            return default;
         }
     }
 
     private sealed class HeuristicBrain : IBrain
     {
-        public BrainOutput DecideAction(BrainInput input)
+        public SimBrainOutput DecideAction(BrainInput input)
         {
             float drinkScore = input.Thirst01 > 0.6f ? 1f : 0f;
-            return new BrainOutput
-            {
-                MoveX = 0.5f,
-                ActionDrinkScore = drinkScore
-            };
+            return new SimBrainOutput(0.5f, 0f, drinkScore);
         }
     }
 

@@ -34,12 +34,7 @@ public static class ReplayVerifier
         int ticksSimulated = 0;
         foreach (ReplayTick tick in replay.Ticks)
         {
-            BrainOutput output = new()
-            {
-                MoveX = tick.OutMoveX,
-                MoveY = tick.OutMoveY,
-                ActionDrinkScore = tick.OutDrink
-            };
+            BrainOutput output = new(tick.OutMoveX, tick.OutMoveY, tick.OutDrink);
 
             simulation.Step(output);
             ticksSimulated += 1;

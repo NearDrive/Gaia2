@@ -1,6 +1,7 @@
 using Core.Evo;
 using Core.Sim;
 using Xunit;
+using SimBrainOutput = Core.Sim.BrainOutput;
 
 namespace Core.Sim.Tests;
 
@@ -107,14 +108,9 @@ public class BenchmarkRunnerTests
 
     private sealed class FixedBrain : IBrain
     {
-        public BrainOutput DecideAction(BrainInput input)
+        public SimBrainOutput DecideAction(BrainInput input)
         {
-            return new BrainOutput
-            {
-                MoveX = 0f,
-                MoveY = 0f,
-                ActionDrinkScore = 0f
-            };
+            return new SimBrainOutput(0f, 0f, 0f);
         }
     }
 }

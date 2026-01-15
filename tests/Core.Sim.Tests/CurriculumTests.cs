@@ -1,6 +1,8 @@
 using System.Numerics;
 using Core.Evo;
+using Core.Sim;
 using Xunit;
+using SimBrainOutput = Core.Sim.BrainOutput;
 
 namespace Core.Sim.Tests;
 
@@ -141,9 +143,9 @@ public class CurriculumTests
 
     private sealed class NoopBrain : IBrain
     {
-        public BrainOutput DecideAction(BrainInput input)
+        public SimBrainOutput DecideAction(BrainInput input)
         {
-            return new BrainOutput();
+            return default;
         }
     }
 }

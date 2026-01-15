@@ -187,7 +187,7 @@ public sealed class Simulation
         AgentState agent = _agents[0];
         agent.UpdateThirst(Config.Dt, Config.ThirstRatePerSecond, Config.DeathGraceSeconds);
 
-        output = new BrainOutput();
+        output = default;
         int successfulDrinks = 0;
 
         if (agent.IsAlive)
@@ -359,7 +359,7 @@ public sealed class Simulation
         ApplyMovement(agent, delta);
 
         float thirstBeforeAction = agent.Thirst01;
-        if (output.ActionDrinkScore > DrinkThreshold)
+        if (output.Drink01 > DrinkThreshold)
         {
             ApplyAction(agent, AgentAction.Drink);
         }

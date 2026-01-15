@@ -1,5 +1,7 @@
+using Core.Evo;
 using Core.Sim;
 using Xunit;
+using SimBrainOutput = Core.Sim.BrainOutput;
 
 namespace Core.Sim.Tests;
 
@@ -63,7 +65,7 @@ public class ReplayTests
     {
         private int _step;
 
-        public BrainOutput DecideAction(BrainInput input)
+        public SimBrainOutput DecideAction(BrainInput input)
         {
             int step = _step;
             _step += 1;
@@ -72,12 +74,7 @@ public class ReplayTests
             float moveY = step % 3 == 0 ? 0.5f : -0.25f;
             float drink = input.Thirst01 > 0.3f ? 0.8f : 0f;
 
-            return new BrainOutput
-            {
-                MoveX = moveX,
-                MoveY = moveY,
-                ActionDrinkScore = drink
-            };
+            return new SimBrainOutput(moveX, moveY, drink);
         }
     }
 }
