@@ -100,6 +100,7 @@ public sealed class EpisodeRunner
             : 0.0;
         double quantizedAvgThirst = Math.Round(avgThirst, 6, MidpointRounding.AwayFromZero);
         float avgThirst01 = (float)quantizedAvgThirst;
+        double distanceTraveled = Math.Round(simulation.DistanceTraveled, 6, MidpointRounding.AwayFromZero);
 
         double thirstScore = 1.0 - avgThirst01;
         double fitness = (ticksSurvived * 1000.0)
@@ -116,6 +117,7 @@ public sealed class EpisodeRunner
             ticksSurvived,
             successfulDrinks,
             avgThirst01,
+            distanceTraveled,
             fitness,
             totalChecksum);
     }

@@ -68,7 +68,9 @@ public class NeedsAndActionsTests
             32,
             8,
             10f,
-            MathF.PI / 2f);
+            MathF.PI / 2f,
+            1.5f,
+            0.05f);
         return new Simulation(config, 1);
     }
 

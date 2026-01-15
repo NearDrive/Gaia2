@@ -1,4 +1,5 @@
 using System.Numerics;
+using Core.Evo;
 
 namespace Core.Sim;
 
@@ -84,6 +85,8 @@ public sealed class Simulation
 
     public IReadOnlyList<AgentState> Agents => _agents;
 
+    public double DistanceTraveled { get; private set; }
+
     public void Step()
     {
         for (int i = 0; i < _agents.Count; i += 1)
@@ -103,7 +106,7 @@ public sealed class Simulation
                 _rng.NextFloat(-1f, 1f),
                 _rng.NextFloat(-1f, 1f));
             delta *= Config.Dt;
-            agent.TryApplyDelta(World, delta);
+            ApplyMovement(agent, delta);
             float[] vision = agent.LastVision;
             _visionSensor.Sense(World, agent.Position, 0f, vision);
             agent.UpdateVision(vision);
@@ -131,9 +134,16 @@ public sealed class Simulation
                 continue;
             }
 
+            BrainInput input = new(agent.LastVision, agent.Thirst01, 1f);
+            BrainOutput output = brain.DecideAction(input);
+            Vector2 delta = ComputeMovementDelta(output);
+            ApplyMovement(agent, delta);
+
             float thirstBeforeAction = agent.Thirst01;
-            AgentAction action = brain.DecideAction(agent, this);
-            ApplyAction(agent, action);
+            if (output.ActionDrinkScore > DrinkThreshold)
+            {
+                ApplyAction(agent, AgentAction.Drink);
+            }
 
             if (agent.Thirst01 < thirstBeforeAction)
             {
@@ -145,11 +155,6 @@ public sealed class Simulation
                 continue;
             }
 
-            Vector2 delta = new Vector2(
-                _rng.NextFloat(-1f, 1f),
-                _rng.NextFloat(-1f, 1f));
-            delta *= Config.Dt;
-            agent.TryApplyDelta(World, delta);
             float[] vision = agent.LastVision;
             _visionSensor.Sense(World, agent.Position, 0f, vision);
             agent.UpdateVision(vision);
@@ -240,5 +245,39 @@ public sealed class Simulation
     private float[] CreateVisionBuffer()
     {
         return new float[_visionSensor.RayCount * 3];
+    }
+
+    private void ApplyMovement(AgentState agent, Vector2 delta)
+    {
+        if (delta == Vector2.Zero)
+        {
+            return;
+        }
+
+        Vector2 start = agent.Position;
+        if (agent.TryApplyDelta(World, delta))
+        {
+            DistanceTraveled += Vector2.Distance(start, agent.Position);
+        }
+    }
+
+    private Vector2 ComputeMovementDelta(BrainOutput output)
+    {
+        Vector2 direction = new Vector2(output.MoveX, output.MoveY);
+        float magnitude = direction.Length();
+
+        if (magnitude < Config.MoveDeadzone)
+        {
+            return Vector2.Zero;
+        }
+
+        if (magnitude > 1f)
+        {
+            direction /= magnitude;
+            magnitude = 1f;
+        }
+
+        float speed = Config.AgentMaxSpeed * magnitude;
+        return direction * (speed * Config.Dt);
     }
 }

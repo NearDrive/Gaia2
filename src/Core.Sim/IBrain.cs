@@ -1,6 +1,8 @@
+using Core.Evo;
+
 namespace Core.Sim;
 
 public interface IBrain
 {
-    AgentAction DecideAction(AgentState agent, Simulation simulation);
+    BrainOutput DecideAction(BrainInput input);
 }

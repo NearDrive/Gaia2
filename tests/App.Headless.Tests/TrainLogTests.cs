@@ -74,8 +74,8 @@ public class TrainLogTests
         SimulationConfig simConfig = CreateMiniSimConfig(seed, MiniTicks);
         EvolutionConfig evoConfig = CreateMiniEvolutionConfig();
 
-        int inputCount = (simConfig.AgentVisionRays * 3) + 1;
-        int outputCount = 1;
+        int inputCount = (simConfig.AgentVisionRays * 3) + 2;
+        int outputCount = 3;
 
         Evolver evolver = new(evoConfig);
         Population population = evolver.CreateInitialPopulation(seed, evoConfig.PopulationSize, inputCount, outputCount);

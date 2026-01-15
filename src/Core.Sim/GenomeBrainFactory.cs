@@ -35,6 +35,7 @@ public sealed class GenomeBrainFactory
         private readonly List<ConnectionGene>[] _incoming;
         private readonly float[] _inputs;
         private readonly float[] _activations;
+        private readonly float[] _outputs;
 
         public GenomeBrain(Genome genome, int inputCount, int outputCount)
         {
@@ -44,6 +45,7 @@ public sealed class GenomeBrainFactory
             _outputCount = outputCount;
             _inputs = new float[inputCount];
             _activations = new float[_nodes.Count];
+            _outputs = new float[outputCount];
 
             _nodeIndexById = new Dictionary<int, int>(_nodes.Count);
             for (int i = 0; i < _nodes.Count; i += 1)
@@ -73,22 +75,21 @@ public sealed class GenomeBrainFactory
             _topologicalOrder = BuildTopologicalOrder();
         }
 
-        public AgentAction DecideAction(AgentState agent, Simulation simulation)
+        public BrainOutput DecideAction(BrainInput input)
         {
-            if (!agent.IsAlive)
-            {
-                return AgentAction.None;
-            }
-
             Array.Clear(_inputs, 0, _inputs.Length);
-            float[] vision = agent.LastVision;
-            int visionCount = Math.Min(vision.Length, _inputCount - 1);
+            float[] vision = input.Vision ?? Array.Empty<float>();
+            int visionCount = Math.Min(vision.Length, _inputCount - 2);
             if (visionCount > 0)
             {
                 Array.Copy(vision, 0, _inputs, 0, visionCount);
             }
 
-            _inputs[_inputCount - 1] = agent.Thirst01;
+            if (_inputCount >= 2)
+            {
+                _inputs[_inputCount - 2] = input.Thirst01;
+                _inputs[_inputCount - 1] = input.Bias;
+            }
 
             Array.Clear(_activations, 0, _activations.Length);
 
@@ -124,7 +125,7 @@ public sealed class GenomeBrainFactory
                 _activations[nodeIndex] = (float)Math.Tanh(sum);
             }
 
-            float outputValue = 0f;
+            Array.Clear(_outputs, 0, _outputs.Length);
             int outputSeen = 0;
             for (int i = 0; i < _nodes.Count; i += 1)
             {
@@ -133,9 +134,9 @@ public sealed class GenomeBrainFactory
                     continue;
                 }
 
-                if (outputSeen == 0)
+                if (outputSeen < _outputs.Length)
                 {
-                    outputValue = _activations[i];
+                    _outputs[outputSeen] = _activations[i];
                 }
 
                 outputSeen += 1;
@@ -145,7 +146,17 @@ public sealed class GenomeBrainFactory
                 }
             }
 
-            return outputValue > 0.5f ? AgentAction.Drink : AgentAction.None;
+            float moveX = _outputCount > 0 ? _outputs[0] : 0f;
+            float moveY = _outputCount > 1 ? _outputs[1] : 0f;
+            float drinkRaw = _outputCount > 2 ? _outputs[2] : 0f;
+            float drinkScore = Math.Clamp((drinkRaw + 1f) * 0.5f, 0f, 1f);
+
+            return new BrainOutput
+            {
+                MoveX = moveX,
+                MoveY = moveY,
+                ActionDrinkScore = drinkScore
+            };
         }
 
         private int[] BuildTopologicalOrder()

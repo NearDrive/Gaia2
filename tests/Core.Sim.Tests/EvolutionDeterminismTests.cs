@@ -38,8 +38,8 @@ public class EvolutionDeterminismTests
             AgentVisionRange: 6f,
             AgentFov: MathF.PI / 2f);
 
-        int inputCount = (simConfig.AgentVisionRays * 3) + 1;
-        int outputCount = 1;
+        int inputCount = (simConfig.AgentVisionRays * 3) + 2;
+        int outputCount = 3;
 
         Population population = evolver.CreateInitialPopulation(seed, config.PopulationSize, inputCount, outputCount);
         Trainer trainer = new();

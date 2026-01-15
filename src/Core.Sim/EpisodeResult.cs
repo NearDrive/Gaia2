@@ -6,5 +6,6 @@ public readonly record struct EpisodeResult(
     int TicksSurvived,
     int SuccessfulDrinks,
     float AvgThirst01,
+    double DistanceTraveled,
     double Fitness,
     ulong Checksum);

@@ -17,7 +17,8 @@ public sealed class GenerationResult
         int bestGenomeConnectionCount,
         int bestTicksSurvived,
         int bestSuccessfulDrinks,
-        float bestAvgThirst01)
+        float bestAvgThirst01,
+        double bestDistanceTraveled)
     {
         Generation = generation;
         BestFitness = bestFitness;
@@ -32,6 +33,7 @@ public sealed class GenerationResult
         BestTicksSurvived = bestTicksSurvived;
         BestSuccessfulDrinks = bestSuccessfulDrinks;
         BestAvgThirst01 = bestAvgThirst01;
+        BestDistanceTraveled = bestDistanceTraveled;
     }
 
     public int Generation { get; }
@@ -59,4 +61,6 @@ public sealed class GenerationResult
     public int BestSuccessfulDrinks { get; }
 
     public float BestAvgThirst01 { get; }
+
+    public double BestDistanceTraveled { get; }
 }
