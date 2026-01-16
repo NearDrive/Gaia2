@@ -31,14 +31,14 @@ public class BenchmarkTests
                 """);
 
             SimulationConfig simConfig = new(
-                Seed: 1,
-                Dt: 1f,
-                TicksPerEpisode: 20,
-                WorldWidth: 8,
-                WorldHeight: 8,
-                AgentVisionRays: 4,
-                AgentVisionRange: 5f,
-                AgentFov: MathF.PI / 2f);
+                seed: 1,
+                dt: 1f,
+                ticksPerEpisode: 20,
+                worldWidth: 8,
+                worldHeight: 8,
+                agentVisionRays: 4,
+                agentVisionRange: 5f,
+                agentFov: MathF.PI / 2f);
 
             Program.Options options = new(
                 Seed: 1,

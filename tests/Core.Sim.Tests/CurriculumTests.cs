@@ -36,16 +36,16 @@ public class CurriculumTests
     public void WorldGen_Bias1_SpawnsNearWater()
     {
         SimulationConfig config = new(
-            Seed: 42,
-            Dt: 1f,
-            TicksPerEpisode: 50,
-            WorldWidth: 20,
-            WorldHeight: 20,
-            AgentVisionRays: 4,
-            AgentVisionRange: 6f,
-            AgentFov: MathF.PI / 2f,
-            WaterProximityBias01: 1f,
-            ObstacleDensity01: 0.1f);
+            seed: 42,
+            dt: 1f,
+            ticksPerEpisode: 50,
+            worldWidth: 20,
+            worldHeight: 20,
+            agentVisionRays: 4,
+            agentVisionRange: 6f,
+            agentFov: MathF.PI / 2f,
+            waterProximityBias01: 1f,
+            obstacleDensity01: 0.1f);
 
         Simulation simulation = new(config, agentCount: 1);
         Vector2 position = simulation.Agents[0].Position;
@@ -92,17 +92,17 @@ public class CurriculumTests
             phases[generation] = phase;
 
             SimulationConfig config = new(
-                Seed: seed,
-                Dt: 1f,
-                TicksPerEpisode: phase.TicksPerEpisode,
-                WorldWidth: phase.WorldSize,
-                WorldHeight: phase.WorldSize,
-                AgentVisionRays: 4,
-                AgentVisionRange: 6f,
-                AgentFov: MathF.PI / 2f,
-                ThirstRatePerSecond: phase.ThirstRatePerSecond,
-                WaterProximityBias01: phase.WaterProximityBias01,
-                ObstacleDensity01: phase.ObstacleDensity01);
+                seed: seed,
+                dt: 1f,
+                ticksPerEpisode: phase.TicksPerEpisode,
+                worldWidth: phase.WorldSize,
+                worldHeight: phase.WorldSize,
+                agentVisionRays: 4,
+                agentVisionRange: 6f,
+                agentFov: MathF.PI / 2f,
+                thirstRatePerSecond: phase.ThirstRatePerSecond,
+                waterProximityBias01: phase.WaterProximityBias01,
+                obstacleDensity01: phase.ObstacleDensity01);
 
             EpisodeRunner runner = new(config);
             EpisodeResult result = runner.RunEpisode(brain, seed + (generation * 100), phase.TicksPerEpisode, 1);

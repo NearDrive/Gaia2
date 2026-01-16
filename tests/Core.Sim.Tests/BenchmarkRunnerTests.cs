@@ -95,14 +95,14 @@ public class BenchmarkRunnerTests
     private static SimulationConfig CreateMiniSimConfig()
     {
         return new SimulationConfig(
-            Seed: 1,
-            Dt: 1f,
-            TicksPerEpisode: 30,
-            WorldWidth: 12,
-            WorldHeight: 12,
-            AgentVisionRays: 4,
-            AgentVisionRange: 5f,
-            AgentFov: MathF.PI / 2f);
+            seed: 1,
+            dt: 1f,
+            ticksPerEpisode: 30,
+            worldWidth: 12,
+            worldHeight: 12,
+            agentVisionRays: 4,
+            agentVisionRange: 5f,
+            agentFov: MathF.PI / 2f);
     }
 
     private sealed class FixedBrain : IBrain

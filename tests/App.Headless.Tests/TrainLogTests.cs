@@ -168,14 +168,14 @@ public class TrainLogTests
     private static SimulationConfig CreateMiniSimConfig(int seed, int ticks)
     {
         return new SimulationConfig(
-            Seed: seed,
-            Dt: 1f,
-            TicksPerEpisode: ticks,
-            WorldWidth: 12,
-            WorldHeight: 12,
-            AgentVisionRays: 4,
-            AgentVisionRange: 5f,
-            AgentFov: MathF.PI / 2f);
+            seed: seed,
+            dt: 1f,
+            ticksPerEpisode: ticks,
+            worldWidth: 12,
+            worldHeight: 12,
+            agentVisionRays: 4,
+            agentVisionRange: 5f,
+            agentFov: MathF.PI / 2f);
     }
 
     private static EvolutionConfig CreateMiniEvolutionConfig()

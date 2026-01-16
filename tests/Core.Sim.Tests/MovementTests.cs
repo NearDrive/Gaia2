@@ -73,16 +73,16 @@ public class MovementTests
     private static SimulationConfig CreateConfig(float agentMaxSpeed, float moveDeadzone, int seed)
     {
         return new SimulationConfig(
-            Seed: seed,
-            Dt: 1f,
-            TicksPerEpisode: 10,
-            WorldWidth: 16,
-            WorldHeight: 16,
-            AgentVisionRays: 4,
-            AgentVisionRange: 6f,
-            AgentFov: MathF.PI / 2f,
-            AgentMaxSpeed: agentMaxSpeed,
-            MoveDeadzone: moveDeadzone);
+            seed: seed,
+            dt: 1f,
+            ticksPerEpisode: 10,
+            worldWidth: 16,
+            worldHeight: 16,
+            agentVisionRays: 4,
+            agentVisionRange: 6f,
+            agentFov: MathF.PI / 2f,
+            agentMaxSpeed: agentMaxSpeed,
+            moveDeadzone: moveDeadzone);
     }
 
     private static Vector2 FindEmptyTilePosition(SimulationConfig config)
