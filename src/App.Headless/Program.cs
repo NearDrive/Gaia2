@@ -43,6 +43,11 @@ internal static class Program
             return 0;
         }
 
+        if (ShouldPrepareEmbeddings(options.Mode))
+        {
+            EnsureEmbeddingRegistry(options);
+        }
+
         SimulationConfig config = new(
             options.Seed,
             DefaultDt,
@@ -224,6 +229,9 @@ internal static class Program
         string? metricsOut = null;
         string replayInputPath = string.Empty;
         string replayOutputPath = string.Empty;
+        string embeddingsPath = string.Empty;
+        int embeddingDimension = 8;
+        int? embeddingSeed = null;
 
         for (int i = 0; i < args.Length; i += 1)
         {
@@ -261,6 +269,15 @@ internal static class Program
                     break;
                 case "--out-dir":
                     outDir = ParseStringValue(args, ref i, "--out-dir");
+                    break;
+                case "--embeddings":
+                    embeddingsPath = ParseStringValue(args, ref i, "--embeddings");
+                    break;
+                case "--embedding-dim":
+                    embeddingDimension = ParseIntValue(args, ref i, "--embedding-dim");
+                    break;
+                case "--embedding-seed":
+                    embeddingSeed = ParseIntValue(args, ref i, "--embedding-seed");
                     break;
                 case "--parallel":
                     parallel = ParseParallelValue(args, ref i);
@@ -385,6 +402,11 @@ internal static class Program
             throw new ArgumentException("Missing required --brain <none|neat> argument for episode mode.");
         }
 
+        if (embeddingDimension <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(embeddingDimension), "Embedding dimension must be > 0.");
+        }
+
         int resolvedMaxDegree = parallel
             ? maxDegree ?? Environment.ProcessorCount
             : 0;
@@ -395,6 +417,7 @@ internal static class Program
         }
 
         int resolvedSeed = seed ?? 0;
+        int resolvedEmbeddingSeed = embeddingSeed ?? resolvedSeed;
 
         int resolvedSnapshotEvery = snapshotEvery ?? 0;
 
@@ -424,7 +447,10 @@ internal static class Program
             Metrics: metrics,
             MetricsOut: metricsOut,
             ReplayInputPath: replayInputPath,
-            ReplayOutputPath: replayOutputPath);
+            ReplayOutputPath: replayOutputPath,
+            EmbeddingPath: embeddingsPath,
+            EmbeddingDimension: embeddingDimension,
+            EmbeddingSeed: resolvedEmbeddingSeed);
     }
 
     internal static Options NormalizeOptions(Options options)
@@ -456,12 +482,19 @@ internal static class Program
             snapshotDirectory = Path.Combine(outDir, "snapshots");
         }
 
+        string embeddingPath = options.EmbeddingPath;
+        if (string.IsNullOrWhiteSpace(embeddingPath))
+        {
+            embeddingPath = Path.Combine(outDir, "embeddings", "embedding_registry.json");
+        }
+
         return options with
         {
             OutDir = outDir,
             MetricsOut = metricsOut,
             SnapshotStreamPath = snapshotStreamPath,
-            SnapshotDirectory = snapshotDirectory
+            SnapshotDirectory = snapshotDirectory,
+            EmbeddingPath = embeddingPath
         };
     }
 
@@ -554,6 +587,27 @@ internal static class Program
     private static float Quantize(float value)
     {
         return MathF.Round(value * 1000f) / 1000f;
+    }
+
+    private static bool ShouldPrepareEmbeddings(RunMode mode)
+    {
+        return mode == RunMode.Sim
+            || mode == RunMode.Episode
+            || mode == RunMode.Train
+            || mode == RunMode.Benchmark;
+    }
+
+    private static EmbeddingRegistry EnsureEmbeddingRegistry(Options options)
+    {
+        string path = options.EmbeddingPath;
+        if (File.Exists(path))
+        {
+            return EmbeddingRegistry.Load(path);
+        }
+
+        EmbeddingRegistry registry = new(options.EmbeddingDimension, options.EmbeddingSeed);
+        registry.Save(path);
+        return registry;
     }
 
     private static IBrain CreateBrain(string brain)
@@ -1152,7 +1206,10 @@ internal static class Program
         bool Metrics = false,
         string? MetricsOut = null,
         string ReplayInputPath = "",
-        string ReplayOutputPath = "");
+        string ReplayOutputPath = "",
+        string EmbeddingPath = "",
+        int EmbeddingDimension = 8,
+        int EmbeddingSeed = 0);
 
     internal readonly record struct ManifestComparisonResult(bool Equivalent, IReadOnlyList<string> Differences);
 
