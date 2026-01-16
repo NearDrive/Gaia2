@@ -152,7 +152,7 @@ public sealed class GridWorld
         }
     }
 
-    private void SetTile(int x, int y, TileId id)
+    internal void SetTile(int x, int y, TileId id)
     {
         if (!InBounds(x, y))
         {

@@ -4,7 +4,6 @@ namespace Core.Sim;
 
 public sealed class VisionSensor
 {
-    private const float StepSize = 0.25f;
     private const float QuantizeScale = 1000f;
     private readonly EmbeddingRegistry _embeddingRegistry;
 
@@ -82,45 +81,117 @@ public sealed class VisionSensor
         {
             float angle = startAngle + (angleStep * i);
             Vector2 direction = new Vector2(MathF.Cos(angle), MathF.Sin(angle));
-            float distanceNorm = 1f;
             int baseOffset = i * (EmbeddingDimension + 1);
             Array.Clear(results, baseOffset + 1, EmbeddingDimension);
 
-            for (float distance = StepSize; distance <= MaxDistance; distance += StepSize)
-            {
-                Vector2 sample = agentPos + (direction * distance);
-                int tileX = (int)MathF.Floor(sample.X);
-                int tileY = (int)MathF.Floor(sample.Y);
+            RaycastHit hit = RaycastDda(world, agentPos, direction, MaxDistance);
+            float distanceNorm = hit.Hit
+                ? Quantize(Math.Clamp(hit.Distance / MaxDistance, 0f, 1f))
+                : 1f;
 
-                TileId hitId = TileId.Empty;
-                bool hit = false;
-
-                if (!world.InBounds(tileX, tileY))
-                {
-                    hit = true;
-                    hitId = TileId.Solid;
-                }
-                else
-                {
-                    Tile tile = world.GetTile(tileX, tileY);
-                    if (tile.Id == TileId.Solid || tile.Id == TileId.Water)
-                    {
-                        hit = true;
-                        hitId = tile.Id;
-                    }
-                }
-
-                if (hit)
-                {
-                    distanceNorm = Quantize(distance / MaxDistance);
-                    float[] embedding = _embeddingRegistry.GetTileEmbedding((int)hitId);
-                    Array.Copy(embedding, 0, results, baseOffset + 1, EmbeddingDimension);
-                    break;
-                }
-            }
-
+            TileId hitId = hit.Hit ? hit.TileId : TileId.Empty;
+            float[] embedding = _embeddingRegistry.GetTileEmbedding((int)hitId);
+            Array.Copy(embedding, 0, results, baseOffset + 1, EmbeddingDimension);
             results[baseOffset] = distanceNorm;
         }
+    }
+
+    internal static RaycastHit RaycastDda(GridWorld world, Vector2 origin, Vector2 direction, float maxDistance)
+    {
+        if (maxDistance <= 0f)
+        {
+            return new RaycastHit(TileId.Empty, 0f, hit: false);
+        }
+
+        if (direction == Vector2.Zero)
+        {
+            return new RaycastHit(TileId.Empty, 0f, hit: false);
+        }
+
+        int cellX = (int)MathF.Floor(origin.X);
+        int cellY = (int)MathF.Floor(origin.Y);
+
+        if (!world.InBounds(cellX, cellY))
+        {
+            return new RaycastHit(TileId.Solid, 0f, hit: true);
+        }
+
+        if (world.IsBlocked(cellX, cellY))
+        {
+            return new RaycastHit(world.GetTile(cellX, cellY).Id, 0f, hit: true);
+        }
+
+        int stepX = direction.X >= 0f ? 1 : -1;
+        int stepY = direction.Y >= 0f ? 1 : -1;
+
+        float tDeltaX = direction.X == 0f ? float.PositiveInfinity : MathF.Abs(1f / direction.X);
+        float tDeltaY = direction.Y == 0f ? float.PositiveInfinity : MathF.Abs(1f / direction.Y);
+
+        float tMaxX = direction.X == 0f
+            ? float.PositiveInfinity
+            : ((stepX > 0 ? (cellX + 1f - origin.X) : (origin.X - cellX)) * tDeltaX);
+        float tMaxY = direction.Y == 0f
+            ? float.PositiveInfinity
+            : ((stepY > 0 ? (cellY + 1f - origin.Y) : (origin.Y - cellY)) * tDeltaY);
+
+        float traveled = 0f;
+
+        while (traveled <= maxDistance)
+        {
+            if (tMaxX < tMaxY)
+            {
+                cellX += stepX;
+                traveled = tMaxX;
+                tMaxX += tDeltaX;
+            }
+            else if (tMaxY < tMaxX)
+            {
+                cellY += stepY;
+                traveled = tMaxY;
+                tMaxY += tDeltaY;
+            }
+            else
+            {
+                cellX += stepX;
+                cellY += stepY;
+                traveled = tMaxX;
+                tMaxX += tDeltaX;
+                tMaxY += tDeltaY;
+            }
+
+            if (traveled > maxDistance)
+            {
+                break;
+            }
+
+            if (!world.InBounds(cellX, cellY))
+            {
+                return new RaycastHit(TileId.Solid, traveled, hit: true);
+            }
+
+            if (world.IsBlocked(cellX, cellY))
+            {
+                return new RaycastHit(world.GetTile(cellX, cellY).Id, traveled, hit: true);
+            }
+        }
+
+        return new RaycastHit(TileId.Empty, maxDistance, hit: false);
+    }
+
+    internal readonly struct RaycastHit
+    {
+        public RaycastHit(TileId tileId, float distance, bool hit)
+        {
+            TileId = tileId;
+            Distance = distance;
+            Hit = hit;
+        }
+
+        public TileId TileId { get; }
+
+        public float Distance { get; }
+
+        public bool Hit { get; }
     }
 
     private static float Quantize(float value)
