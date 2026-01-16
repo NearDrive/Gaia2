@@ -51,7 +51,7 @@ public sealed class Trainer
         };
 
         int inputCount = BrainIO.InputCount(generationConfig.AgentVisionRays, generationConfig.EmbeddingDimension);
-        int outputCount = BrainIO.OutputCount;
+        int outputCount = BrainIO.OutputCount(generationConfig.ActionPreferenceCount);
 
         EpisodeRunner runner = new(generationConfig);
 

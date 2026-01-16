@@ -635,7 +635,7 @@ internal static class Program
         Genome genome = GenomeJson.Deserialize(json);
 
         int inputCount = BrainIO.InputCount(simConfig.AgentVisionRays, simConfig.EmbeddingDimension);
-        int outputCount = BrainIO.OutputCount;
+        int outputCount = BrainIO.OutputCount(simConfig.ActionPreferenceCount);
 
         GenomeBrainFactory factory = new();
         return factory.CreateBrain(genome, inputCount, outputCount);
@@ -688,7 +688,7 @@ internal static class Program
         int seed)
     {
         int inputCount = BrainIO.InputCount(simConfig.AgentVisionRays, simConfig.EmbeddingDimension);
-        int outputCount = BrainIO.OutputCount;
+        int outputCount = BrainIO.OutputCount(simConfig.ActionPreferenceCount);
         GenomeBrainFactory factory = new();
         IBrain brain = factory.CreateBrain(genome, inputCount, outputCount);
         EpisodeRunner runner = new(simConfig);
@@ -731,7 +731,7 @@ internal static class Program
 
             Evolver freshEvolver = new(evoConfig);
             int inputCount = BrainIO.InputCount(simConfig.AgentVisionRays, simConfig.EmbeddingDimension);
-            int outputCount = BrainIO.OutputCount;
+            int outputCount = BrainIO.OutputCount(simConfig.ActionPreferenceCount);
             population = freshEvolver.CreateInitialPopulation(
                 options.Seed,
                 options.Population,
@@ -1128,11 +1128,13 @@ internal static class Program
             config.EmbeddingDimension,
             config.EmbeddingSeed,
             config.AgentMaxSpeed,
+            config.AgentTurnRateRad,
             config.MoveDeadzone,
             config.ThirstRatePerSecond,
             config.DeathGraceSeconds,
             config.WaterProximityBias01,
-            config.ObstacleDensity01);
+            config.ObstacleDensity01,
+            config.ActionPreferenceCount);
 
         return new ReplayRecord(
             ReplayRecord.CurrentSchemaVersion,
@@ -1171,13 +1173,15 @@ internal static class Program
             config.AgentVisionRange,
             config.AgentFov,
             config.AgentMaxSpeed,
+            config.AgentTurnRateRad,
             config.MoveDeadzone,
             config.ThirstRatePerSecond,
             config.DeathGraceSeconds,
             config.WaterProximityBias01,
             config.ObstacleDensity01,
             embeddingDimension,
-            embeddingSeed);
+            embeddingSeed,
+            config.ActionPreferenceCount);
     }
 
     internal enum RunMode
@@ -1291,11 +1295,10 @@ internal static class Program
     {
         public BrainOutput DecideAction(BrainInput input)
         {
-            float drinkScore = input.Thirst01 > 0.6f ? 1f : 0f;
             return new BrainOutput
             {
-                MoveX = 0.5f,
-                ActionDrinkScore = drinkScore
+                ForwardSpeed = 0.5f,
+                ActionPreferenceVector = new[] { input.Thirst01 > 0.6f ? 1f : -1f }
             };
         }
     }
@@ -1304,12 +1307,11 @@ internal static class Program
     {
         public BrainOutput DecideAction(BrainInput input)
         {
-            float drinkScore = input.Thirst01 > 0.5f ? 1f : 0f;
             return new BrainOutput
             {
-                MoveX = 0.25f,
-                MoveY = -0.15f,
-                ActionDrinkScore = drinkScore
+                RotationDelta = -0.15f,
+                ForwardSpeed = 0.25f,
+                ActionPreferenceVector = new[] { input.Thirst01 > 0.5f ? 1f : -1f }
             };
         }
     }

@@ -39,7 +39,7 @@ public class EvolutionDeterminismTests
             agentFov: MathF.PI / 2f);
 
         int inputCount = BrainIO.InputCount(simConfig.AgentVisionRays, simConfig.EmbeddingDimension);
-        int outputCount = BrainIO.OutputCount;
+        int outputCount = BrainIO.OutputCount(simConfig.ActionPreferenceCount);
 
         Population population = evolver.CreateInitialPopulation(seed, config.PopulationSize, inputCount, outputCount);
         Trainer trainer = new();

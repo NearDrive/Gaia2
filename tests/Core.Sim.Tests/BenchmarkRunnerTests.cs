@@ -111,9 +111,9 @@ public class BenchmarkRunnerTests
         {
             return new BrainOutput
             {
-                MoveX = 0f,
-                MoveY = 0f,
-                ActionDrinkScore = 0f
+                ForwardSpeed = 0f,
+                RotationDelta = 0f,
+                ActionPreferenceVector = new[] { -1f }
             };
         }
     }

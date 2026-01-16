@@ -103,18 +103,18 @@ public class EpisodeRunnerTests
     private static SimulationConfig CreateConfig(float thirstRate = 0.05f, float deathGrace = 2f)
     {
         return new SimulationConfig(
-            0,
-            1f,
-            100,
-            8,
-            8,
-            4,
-            4f,
-            MathF.PI / 2f,
-            1.5f,
-            0.05f,
-            thirstRate,
-            deathGrace);
+            seed: 0,
+            dt: 1f,
+            ticksPerEpisode: 100,
+            worldWidth: 8,
+            worldHeight: 8,
+            agentVisionRays: 4,
+            agentVisionRange: 4f,
+            agentFov: MathF.PI / 2f,
+            agentMaxSpeed: 1.5f,
+            moveDeadzone: 0.05f,
+            thirstRatePerSecond: thirstRate,
+            deathGraceSeconds: deathGrace);
     }
 
     private static Vector2 FindWaterStart(SimulationConfig config, int seed)
@@ -138,7 +138,10 @@ public class EpisodeRunnerTests
     {
         public BrainOutput DecideAction(BrainInput input)
         {
-            return new BrainOutput();
+            return new BrainOutput
+            {
+                ActionPreferenceVector = new[] { -1f }
+            };
         }
     }
 
@@ -148,7 +151,7 @@ public class EpisodeRunnerTests
         {
             return new BrainOutput
             {
-                ActionDrinkScore = 1f
+                ActionPreferenceVector = new[] { 1f }
             };
         }
     }
@@ -157,7 +160,10 @@ public class EpisodeRunnerTests
     {
         public BrainOutput DecideAction(BrainInput input)
         {
-            return new BrainOutput();
+            return new BrainOutput
+            {
+                ActionPreferenceVector = new[] { -1f }
+            };
         }
     }
 
@@ -167,7 +173,8 @@ public class EpisodeRunnerTests
         {
             return new BrainOutput
             {
-                MoveX = 1f
+                ForwardSpeed = 1f,
+                ActionPreferenceVector = new[] { -1f }
             };
         }
     }

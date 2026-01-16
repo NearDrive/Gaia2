@@ -146,16 +146,20 @@ public sealed class GenomeBrainFactory
                 }
             }
 
-            float moveX = _outputCount > 0 ? _outputs[0] : 0f;
-            float moveY = _outputCount > 1 ? _outputs[1] : 0f;
-            float drinkRaw = _outputCount > 2 ? _outputs[2] : 0f;
-            float drinkScore = Math.Clamp((drinkRaw + 1f) * 0.5f, 0f, 1f);
+            float rotationDelta = _outputCount > 0 ? Math.Clamp(_outputs[0], -1f, 1f) : 0f;
+            float forwardSpeed = _outputCount > 1 ? Math.Clamp((_outputs[1] + 1f) * 0.5f, 0f, 1f) : 0f;
+            int preferenceCount = Math.Max(0, _outputCount - 2);
+            float[] preferences = preferenceCount > 0 ? new float[preferenceCount] : Array.Empty<float>();
+            for (int i = 0; i < preferenceCount; i += 1)
+            {
+                preferences[i] = Math.Clamp(_outputs[i + 2], -1f, 1f);
+            }
 
             return new BrainOutput
             {
-                MoveX = moveX,
-                MoveY = moveY,
-                ActionDrinkScore = drinkScore
+                RotationDelta = rotationDelta,
+                ForwardSpeed = forwardSpeed,
+                ActionPreferenceVector = preferences
             };
         }
 

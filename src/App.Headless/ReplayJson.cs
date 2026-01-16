@@ -13,11 +13,13 @@ internal sealed record ReplayConfig(
     int? EmbeddingDimension,
     int? EmbeddingSeed,
     float AgentMaxSpeed,
+    float AgentTurnRateRad,
     float MoveDeadzone,
     float ThirstRatePerSecond,
     float DeathGraceSeconds,
     float WaterProximityBias01,
-    float ObstacleDensity01);
+    float ObstacleDensity01,
+    int ActionPreferenceCount);
 
 internal sealed record ReplayRecord(
     int SchemaVersion,
@@ -28,7 +30,7 @@ internal sealed record ReplayRecord(
     ReplayConfig Config,
     ulong Checksum)
 {
-    public const int CurrentSchemaVersion = 1;
+    public const int CurrentSchemaVersion = 2;
 }
 
 internal static class ReplayJson

@@ -5,7 +5,16 @@ namespace Core.Evo;
 public static class BrainIO
 {
     public const int NonVisionInputCount = 2;
-    public const int OutputCount = 3;
+
+    public static int OutputCount(int actionPreferenceCount)
+    {
+        if (actionPreferenceCount < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(actionPreferenceCount));
+        }
+
+        return 2 + actionPreferenceCount;
+    }
 
     public static int VisionInputCount(int rayCount, int embeddingDimension)
     {
@@ -35,7 +44,7 @@ public readonly record struct BrainInput(
 
 public readonly record struct BrainOutput
 {
-    public float MoveX { get; init; }
-    public float MoveY { get; init; }
-    public float ActionDrinkScore { get; init; }
+    public float RotationDelta { get; init; }
+    public float ForwardSpeed { get; init; }
+    public float[] ActionPreferenceVector { get; init; } = Array.Empty<float>();
 }
