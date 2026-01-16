@@ -1,0 +1,1 @@
+{"schemaVersion":1,"seed":999,"ticks":60,"agents":1,"brain":"fake","config":{"dt":1,"worldWidth":32,"worldHeight":32,"agentVisionRays":8,"agentVisionRange":10,"agentFov":1.5707964,"agentMaxSpeed":1.5,"moveDeadzone":0.05,"thirstRatePerSecond":0.01,"deathGraceSeconds":3,"waterProximityBias01":0,"obstacleDensity01":0.05},"checksum":2148692187464229835}

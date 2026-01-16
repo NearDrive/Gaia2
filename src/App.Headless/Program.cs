@@ -55,6 +55,26 @@ internal static class Program
             DefaultAgentMaxSpeed,
             DefaultMoveDeadzone);
 
+        if (options.Mode == RunMode.Replay)
+        {
+            ReplayRecord replay = CreateReplayRecord(options, config);
+            ReplayJson.Write(options.ReplayOutputPath, replay);
+            return 0;
+        }
+
+        if (options.Mode == RunMode.ReplayVerify)
+        {
+            ReplayVerificationResult verification = VerifyReplay(options.ReplayInputPath);
+            if (verification.Verified)
+            {
+                Console.WriteLine("VERIFY OK");
+                return 0;
+            }
+
+            Console.WriteLine($"VERIFY FAIL expected={verification.ExpectedChecksum} actual={verification.ActualChecksum}");
+            return 2;
+        }
+
         if (options.Mode == RunMode.Benchmark)
         {
             RunBenchmark(options, config);
@@ -202,6 +222,8 @@ internal static class Program
         string? snapshotStreamPath = null;
         bool metrics = false;
         string? metricsOut = null;
+        string replayInputPath = string.Empty;
+        string replayOutputPath = string.Empty;
 
         for (int i = 0; i < args.Length; i += 1)
         {
@@ -267,6 +289,12 @@ internal static class Program
                 case "--metrics-out":
                     metricsOut = ParseStringValue(args, ref i, "--metrics-out");
                     break;
+                case "--in":
+                    replayInputPath = ParseStringValue(args, ref i, "--in");
+                    break;
+                case "--out":
+                    replayOutputPath = ParseStringValue(args, ref i, "--out");
+                    break;
                 case "--a":
                     comparePathA = ParseStringValue(args, ref i, "--a");
                     break;
@@ -278,7 +306,11 @@ internal static class Program
             }
         }
 
-        if (!seed.HasValue && mode != RunMode.Train && mode != RunMode.Compare && mode != RunMode.Benchmark)
+        if (!seed.HasValue
+            && mode != RunMode.Train
+            && mode != RunMode.Compare
+            && mode != RunMode.Benchmark
+            && mode != RunMode.ReplayVerify)
         {
             throw new ArgumentException("Missing required --seed <int> argument.");
         }
@@ -301,6 +333,16 @@ internal static class Program
         if (mode == RunMode.Compare && (string.IsNullOrWhiteSpace(comparePathA) || string.IsNullOrWhiteSpace(comparePathB)))
         {
             throw new ArgumentException("Missing required --a <manifestA> and --b <manifestB> arguments for compare mode.");
+        }
+
+        if (mode == RunMode.Replay && string.IsNullOrWhiteSpace(replayOutputPath))
+        {
+            throw new ArgumentException("Missing required --out <path> argument for replay mode.");
+        }
+
+        if (mode == RunMode.ReplayVerify && string.IsNullOrWhiteSpace(replayInputPath))
+        {
+            throw new ArgumentException("Missing required --in <path> argument for replay-verify mode.");
         }
 
         if (ticks <= 0)
@@ -380,7 +422,9 @@ internal static class Program
             SnapshotDirectory: null,
             SnapshotStreamPath: resolvedSnapshotStreamPath,
             Metrics: metrics,
-            MetricsOut: metricsOut);
+            MetricsOut: metricsOut,
+            ReplayInputPath: replayInputPath,
+            ReplayOutputPath: replayOutputPath);
     }
 
     internal static Options NormalizeOptions(Options options)
@@ -459,7 +503,10 @@ internal static class Program
             "train" => RunMode.Train,
             "compare" => RunMode.Compare,
             "benchmark" => RunMode.Benchmark,
-            _ => throw new ArgumentException($"Invalid mode '{value}'. Use 'sim', 'episode', 'train', 'compare', or 'benchmark'.")
+            "replay" => RunMode.Replay,
+            "replay-verify" => RunMode.ReplayVerify,
+            _ => throw new ArgumentException(
+                $"Invalid mode '{value}'. Use 'sim', 'episode', 'train', 'compare', 'benchmark', 'replay', or 'replay-verify'.")
         };
     }
 
@@ -515,7 +562,8 @@ internal static class Program
         {
             "none" => new NoneBrain(),
             "neat" => new HeuristicBrain(),
-            _ => throw new ArgumentException($"Unknown brain '{brain}'. Use 'none' or 'neat'.")
+            "fake" => new FakeBrain(),
+            _ => throw new ArgumentException($"Unknown brain '{brain}'. Use 'none', 'neat', or 'fake'.")
         };
     }
 
@@ -1007,13 +1055,77 @@ internal static class Program
         }
     }
 
+    internal static ReplayRecord CreateReplayRecord(Options options, SimulationConfig config)
+    {
+        IBrain brain = CreateBrain(options.Brain);
+        EpisodeRunner runner = new(config);
+        EpisodeResult result = runner.RunEpisode(brain, options.Seed, options.Ticks, options.Agents);
+
+        ReplayConfig replayConfig = new(
+            config.Dt,
+            config.WorldWidth,
+            config.WorldHeight,
+            config.AgentVisionRays,
+            config.AgentVisionRange,
+            config.AgentFov,
+            config.AgentMaxSpeed,
+            config.MoveDeadzone,
+            config.ThirstRatePerSecond,
+            config.DeathGraceSeconds,
+            config.WaterProximityBias01,
+            config.ObstacleDensity01);
+
+        return new ReplayRecord(
+            ReplayRecord.CurrentSchemaVersion,
+            options.Seed,
+            options.Ticks,
+            options.Agents,
+            options.Brain,
+            replayConfig,
+            result.Checksum);
+    }
+
+    internal static ReplayVerificationResult VerifyReplay(string path)
+    {
+        ReplayRecord replay = ReplayJson.Read(path);
+        SimulationConfig config = BuildSimulationConfig(replay);
+        IBrain brain = CreateBrain(replay.Brain);
+        EpisodeRunner runner = new(config);
+        EpisodeResult result = runner.RunEpisode(brain, replay.Seed, replay.Ticks, replay.Agents);
+        bool verified = result.Checksum == replay.Checksum;
+
+        return new ReplayVerificationResult(verified, replay.Checksum, result.Checksum);
+    }
+
+    private static SimulationConfig BuildSimulationConfig(ReplayRecord replay)
+    {
+        ReplayConfig config = replay.Config;
+        return new SimulationConfig(
+            replay.Seed,
+            config.Dt,
+            replay.Ticks,
+            config.WorldWidth,
+            config.WorldHeight,
+            config.AgentVisionRays,
+            config.AgentVisionRange,
+            config.AgentFov,
+            config.AgentMaxSpeed,
+            config.MoveDeadzone,
+            config.ThirstRatePerSecond,
+            config.DeathGraceSeconds,
+            config.WaterProximityBias01,
+            config.ObstacleDensity01);
+    }
+
     internal enum RunMode
     {
         Sim,
         Episode,
         Train,
         Compare,
-        Benchmark
+        Benchmark,
+        Replay,
+        ReplayVerify
     }
 
     internal readonly record struct Options(
@@ -1038,9 +1150,13 @@ internal static class Program
         string? SnapshotDirectory = null,
         string? SnapshotStreamPath = null,
         bool Metrics = false,
-        string? MetricsOut = null);
+        string? MetricsOut = null,
+        string ReplayInputPath = "",
+        string ReplayOutputPath = "");
 
     internal readonly record struct ManifestComparisonResult(bool Equivalent, IReadOnlyList<string> Differences);
+
+    internal readonly record struct ReplayVerificationResult(bool Verified, ulong ExpectedChecksum, ulong ActualChecksum);
 
     private static StreamWriter CreateTrainLogWriter(string logPath)
     {
@@ -1113,6 +1229,20 @@ internal static class Program
             return new BrainOutput
             {
                 MoveX = 0.5f,
+                ActionDrinkScore = drinkScore
+            };
+        }
+    }
+
+    private sealed class FakeBrain : IBrain
+    {
+        public BrainOutput DecideAction(BrainInput input)
+        {
+            float drinkScore = input.Thirst01 > 0.5f ? 1f : 0f;
+            return new BrainOutput
+            {
+                MoveX = 0.25f,
+                MoveY = -0.15f,
                 ActionDrinkScore = drinkScore
             };
         }
