@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using System.Text.Json;
 using Core.Evo;
 using Core.Sim;
 
@@ -97,7 +98,24 @@ internal static class Program
                     options.Ticks,
                     1,
                     options.Snapshots,
-                    options.SnapshotEvery);
+                    options.SnapshotEvery,
+                    writeSnapshotsToDisk: !options.Snapshots);
+
+                if (options.Snapshots)
+                {
+                    string snapshotStreamPath = options.SnapshotStreamPath
+                        ?? throw new InvalidOperationException("Snapshot stream path was not resolved.");
+                    SnapshotStreamHeader header = new()
+                    {
+                        Seed = seed,
+                        WorldWidth = config.WorldWidth,
+                        WorldHeight = config.WorldHeight,
+                        Dt = config.Dt,
+                        SnapshotEveryNTicks = options.SnapshotEvery
+                    };
+                    WriteSnapshotStream(snapshotStreamPath, header, result.Snapshots);
+                }
+
                 Console.WriteLine(string.Join(
                     ",",
                     result.Seed.ToString(CultureInfo.InvariantCulture),
@@ -151,6 +169,7 @@ internal static class Program
         string scenariosPath = "default";
         bool snapshots = false;
         int? snapshotEvery = null;
+        string? snapshotStreamPath = null;
 
         for (int i = 0; i < args.Length; i += 1)
         {
@@ -203,6 +222,9 @@ internal static class Program
                     break;
                 case "--snapshot-every":
                     snapshotEvery = ParseIntValue(args, ref i, "--snapshot-every");
+                    break;
+                case "--snapshot-stream":
+                    snapshotStreamPath = ParseStringValue(args, ref i, "--snapshot-stream");
                     break;
                 case "--a":
                     comparePathA = ParseStringValue(args, ref i, "--a");
@@ -293,6 +315,14 @@ internal static class Program
 
         int resolvedSnapshotEvery = snapshotEvery ?? 0;
 
+        string? resolvedSnapshotStreamPath = null;
+
+        if (snapshots)
+        {
+            resolvedSnapshotStreamPath = snapshotStreamPath
+                ?? Path.Combine("artifacts", "snapshots", "snapshots.jsonl");
+        }
+
         return new Options(
             resolvedSeed,
             ticks,
@@ -310,7 +340,8 @@ internal static class Program
             genomePath,
             scenariosPath,
             snapshots,
-            resolvedSnapshotEvery);
+            resolvedSnapshotEvery,
+            resolvedSnapshotStreamPath);
     }
 
     private static int ParseIntValue(string[] args, ref int index, string name)
@@ -740,6 +771,47 @@ internal static class Program
         BenchmarkCsvWriter.Write(csvPath, report);
     }
 
+    private static void WriteSnapshotStream(
+        string path,
+        SnapshotStreamHeader header,
+        IReadOnlyList<WorldSnapshot> snapshots)
+    {
+        if (path is null)
+        {
+            throw new ArgumentNullException(nameof(path));
+        }
+
+        if (header is null)
+        {
+            throw new ArgumentNullException(nameof(header));
+        }
+
+        if (snapshots is null)
+        {
+            throw new ArgumentNullException(nameof(snapshots));
+        }
+
+        string? directory = Path.GetDirectoryName(path);
+
+        if (directory is null)
+        {
+            throw new ArgumentException("Snapshot stream path must include a directory.", nameof(path));
+        }
+
+        Directory.CreateDirectory(directory);
+
+        using FileStream stream = new(path, FileMode.Create, FileAccess.Write, FileShare.Read);
+        using StreamWriter writer = new(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        JsonSerializerOptions options = SnapshotJson.GetWriteOptions();
+
+        SnapshotStreamWriter.WriteHeader(writer, header, options);
+
+        foreach (WorldSnapshot snapshot in snapshots)
+        {
+            SnapshotStreamWriter.WriteSnapshot(writer, snapshot, options);
+        }
+    }
+
     internal enum RunMode
     {
         Sim,
@@ -766,7 +838,8 @@ internal static class Program
         string GenomePath,
         string ScenariosPath,
         bool Snapshots = false,
-        int SnapshotEvery = 0);
+        int SnapshotEvery = 0,
+        string? SnapshotStreamPath = null);
 
     internal readonly record struct ManifestComparisonResult(bool Equivalent, IReadOnlyList<string> Differences);
 

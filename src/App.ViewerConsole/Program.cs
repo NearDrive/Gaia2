@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Core.Sim;
 
@@ -27,17 +28,27 @@ public static class Program
             return 1;
         }
 
-        if (!Directory.Exists(options.InputDirectory))
+        if (options.StreamPath is null && !Directory.Exists(options.InputDirectory ?? string.Empty))
         {
             Console.Error.WriteLine($"Input directory '{options.InputDirectory}' does not exist.");
             return 1;
         }
 
-        IReadOnlyList<SnapshotEntry> snapshots = SnapshotLoader.Load(options.InputDirectory);
+        if (options.StreamPath is not null && !File.Exists(options.StreamPath))
+        {
+            Console.Error.WriteLine($"Snapshot stream file '{options.StreamPath}' does not exist.");
+            return 1;
+        }
+
+        IReadOnlyList<SnapshotEntry> snapshots = options.StreamPath is null
+            ? SnapshotLoader.Load(options.InputDirectory ?? string.Empty)
+            : SnapshotLoader.LoadStream(options.StreamPath);
 
         if (snapshots.Count == 0)
         {
-            Console.Error.WriteLine("No snapshot files found (expected snap_*.json).");
+            Console.Error.WriteLine(options.StreamPath is null
+                ? "No snapshot files found (expected snap_*.json)."
+                : "No snapshots found in stream file.");
             return 1;
         }
 
@@ -60,9 +71,11 @@ public static class Program
     {
         Console.WriteLine("Usage:");
         Console.WriteLine("  dotnet run --project src/App.ViewerConsole -- --in <dir> [--fps <int>] [--mode step|play] [--start <tick>]");
+        Console.WriteLine("  dotnet run --project src/App.ViewerConsole -- --stream <file> [--fps <int>] [--mode step|play] [--start <tick>]");
         Console.WriteLine();
         Console.WriteLine("Options:");
-        Console.WriteLine("  --in <dir>       Directory containing snap_*.json (required)");
+        Console.WriteLine("  --in <dir>       Directory containing snap_*.json (mutually exclusive with --stream)");
+        Console.WriteLine("  --stream <file>  JSONL snapshot stream file (mutually exclusive with --in)");
         Console.WriteLine("  --fps <int>      Frames per second in play mode (default 10)");
         Console.WriteLine("  --mode <mode>    step or play (default step)");
         Console.WriteLine("  --start <tick>   Start at or after this tick (default lowest)");
@@ -75,11 +88,12 @@ internal enum ViewerMode
     Play
 }
 
-internal sealed record ViewerOptions(string InputDirectory, int Fps, ViewerMode Mode, int? StartTick)
+internal sealed record ViewerOptions(string? InputDirectory, string? StreamPath, int Fps, ViewerMode Mode, int? StartTick)
 {
     public static ViewerOptions Parse(string[] args)
     {
         string? inputDirectory = null;
+        string? streamPath = null;
         int fps = 10;
         ViewerMode mode = ViewerMode.Step;
         int? startTick = null;
@@ -92,6 +106,9 @@ internal sealed record ViewerOptions(string InputDirectory, int Fps, ViewerMode 
             {
                 case "--in":
                     inputDirectory = ReadValue(args, ref i, "--in");
+                    break;
+                case "--stream":
+                    streamPath = ReadValue(args, ref i, "--stream");
                     break;
                 case "--fps":
                     fps = ParseInt(ReadValue(args, ref i, "--fps"), "--fps", minValue: 1);
@@ -110,12 +127,17 @@ internal sealed record ViewerOptions(string InputDirectory, int Fps, ViewerMode 
             }
         }
 
-        if (string.IsNullOrWhiteSpace(inputDirectory))
+        if (!string.IsNullOrWhiteSpace(inputDirectory) && !string.IsNullOrWhiteSpace(streamPath))
         {
-            throw new ArgumentException("Missing required --in <dir> argument.");
+            throw new ArgumentException("--in and --stream are mutually exclusive.");
         }
 
-        return new ViewerOptions(inputDirectory, fps, mode, startTick);
+        if (string.IsNullOrWhiteSpace(inputDirectory) && string.IsNullOrWhiteSpace(streamPath))
+        {
+            throw new ArgumentException("Missing required --in <dir> or --stream <file> argument.");
+        }
+
+        return new ViewerOptions(inputDirectory, streamPath, fps, mode, startTick);
     }
 
     private static string ReadValue(string[] args, ref int index, string name)
@@ -176,6 +198,52 @@ internal static class SnapshotLoader
             string json = File.ReadAllText(file);
             WorldSnapshot snapshot = SnapshotJson.Deserialize(json);
             entries.Add(new SnapshotEntry(tick, snapshot, file));
+        }
+
+        return entries.OrderBy(entry => entry.Tick).ToList();
+    }
+
+    public static IReadOnlyList<SnapshotEntry> LoadStream(string path)
+    {
+        if (!File.Exists(path))
+        {
+            throw new FileNotFoundException($"Snapshot stream file not found: {path}");
+        }
+
+        using StreamReader reader = new(path);
+        string? headerLine = reader.ReadLine();
+
+        if (string.IsNullOrWhiteSpace(headerLine))
+        {
+            throw new InvalidOperationException("Snapshot stream header line is missing.");
+        }
+
+        JsonSerializerOptions options = SnapshotJson.GetReadOptions();
+        SnapshotStreamHeader? header = JsonSerializer.Deserialize<SnapshotStreamHeader>(headerLine, options);
+
+        if (header is null)
+        {
+            throw new InvalidOperationException("Unable to deserialize snapshot stream header.");
+        }
+
+        List<SnapshotEntry> entries = new();
+
+        while (true)
+        {
+            string? line = reader.ReadLine();
+
+            if (line is null)
+            {
+                break;
+            }
+
+            if (line.Length == 0)
+            {
+                continue;
+            }
+
+            WorldSnapshot snapshot = SnapshotJson.Deserialize(line);
+            entries.Add(new SnapshotEntry(snapshot.Header.Tick, snapshot, path));
         }
 
         return entries.OrderBy(entry => entry.Tick).ToList();

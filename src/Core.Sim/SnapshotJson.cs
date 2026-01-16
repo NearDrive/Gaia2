@@ -22,6 +22,16 @@ public static class SnapshotJson
         NumberHandling = JsonNumberHandling.Strict
     };
 
+    public static JsonSerializerOptions GetWriteOptions()
+    {
+        return new JsonSerializerOptions(WriteOptions);
+    }
+
+    public static JsonSerializerOptions GetReadOptions()
+    {
+        return new JsonSerializerOptions(ReadOptions);
+    }
+
     public static string Serialize(WorldSnapshot snapshot)
     {
         if (snapshot is null)
