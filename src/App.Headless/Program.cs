@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using Core.Evo;
 using Core.Sim;
+using Persistence.Metrics;
 
 namespace App.Headless;
 
@@ -81,6 +82,7 @@ internal static class Program
         {
             EpisodeRunner runner = new(config);
             IBrain brain = CreateBrain(options.Brain);
+            List<RunMetricsRow>? metricsRows = options.Metrics ? new List<RunMetricsRow>() : null;
 
             Console.WriteLine("Seed,TicksSurvived,SuccessfulDrinks,VisitedCells,DrinkableCellsVisited,AvgThirst01,Fitness,Checksum");
 
@@ -127,10 +129,30 @@ internal static class Program
                     result.Fitness.ToString("0.000", CultureInfo.InvariantCulture),
                     result.Checksum.ToString(CultureInfo.InvariantCulture)));
 
+                if (metricsRows is not null)
+                {
+                    double[] fitness = { result.Fitness };
+                    metricsRows.Add(new RunMetricsRow
+                    {
+                        Index = episode,
+                        BestFitness = (float)result.Fitness,
+                        AvgFitness = (float)result.Fitness,
+                        P50Fitness = MetricsStatistics.ComputePercentile(fitness, 0.50),
+                        P90Fitness = MetricsStatistics.ComputePercentile(fitness, 0.90),
+                        AliveAtEnd = result.TicksSurvived >= result.TicksRequested ? 1 : 0,
+                        FinalChecksum = result.Checksum
+                    });
+                }
+
                 fitnessSum += result.Fitness;
                 minFitness = Math.Min(minFitness, result.Fitness);
                 maxFitness = Math.Max(maxFitness, result.Fitness);
                 survivalSum += result.TicksSurvived / (double)result.TicksRequested;
+            }
+
+            if (metricsRows is not null)
+            {
+                CsvMetricsWriter.Write(options.MetricsOut, metricsRows);
             }
 
             if (options.Episodes > 1)
@@ -170,6 +192,8 @@ internal static class Program
         bool snapshots = false;
         int? snapshotEvery = null;
         string? snapshotStreamPath = null;
+        bool metrics = false;
+        string metricsOut = Path.Combine("artifacts", "metrics", "metrics.csv");
 
         for (int i = 0; i < args.Length; i += 1)
         {
@@ -225,6 +249,12 @@ internal static class Program
                     break;
                 case "--snapshot-stream":
                     snapshotStreamPath = ParseStringValue(args, ref i, "--snapshot-stream");
+                    break;
+                case "--metrics":
+                    metrics = true;
+                    break;
+                case "--metrics-out":
+                    metricsOut = ParseStringValue(args, ref i, "--metrics-out");
                     break;
                 case "--a":
                     comparePathA = ParseStringValue(args, ref i, "--a");
@@ -341,7 +371,9 @@ internal static class Program
             scenariosPath,
             snapshots,
             resolvedSnapshotEvery,
-            resolvedSnapshotStreamPath);
+            resolvedSnapshotStreamPath,
+            metrics,
+            metricsOut);
     }
 
     private static int ParseIntValue(string[] args, ref int index, string name)
@@ -483,10 +515,43 @@ internal static class Program
         return new CurriculumSchedule(totalGenerations, start, end);
     }
 
+    private static SimulationConfig CreateGenerationConfig(
+        SimulationConfig baseConfig,
+        CurriculumSchedule curriculum,
+        int generation)
+    {
+        CurriculumPhase phase = curriculum.GetPhase(generation);
+        return baseConfig with
+        {
+            WorldWidth = phase.WorldSize,
+            WorldHeight = phase.WorldSize,
+            ThirstRatePerSecond = phase.ThirstRatePerSecond,
+            WaterProximityBias01 = phase.WaterProximityBias01,
+            ObstacleDensity01 = phase.ObstacleDensity01,
+            TicksPerEpisode = phase.TicksPerEpisode
+        };
+    }
+
+    private static (int AliveAtEnd, ulong FinalChecksum) ComputeEpisodeMetrics(
+        Genome genome,
+        SimulationConfig simConfig,
+        int seed)
+    {
+        int inputCount = (simConfig.AgentVisionRays * 3) + 2;
+        int outputCount = 3;
+        GenomeBrainFactory factory = new();
+        IBrain brain = factory.CreateBrain(genome, inputCount, outputCount);
+        EpisodeRunner runner = new(simConfig);
+        EpisodeResult result = runner.RunEpisode(brain, seed, simConfig.TicksPerEpisode, 1);
+        int aliveAtEnd = result.TicksSurvived >= result.TicksRequested ? 1 : 0;
+        return (aliveAtEnd, result.Checksum);
+    }
+
     internal static void RunTraining(Options options, SimulationConfig simConfig)
     {
         Directory.CreateDirectory("artifacts");
         string logPath = Path.Combine("artifacts", "train_log.csv");
+        List<RunMetricsRow>? metricsRows = options.Metrics ? new List<RunMetricsRow>() : null;
 
         EvolutionConfig evoConfig;
         Population population;
@@ -595,6 +660,26 @@ internal static class Program
                 WriteGenomeJson(bestGenome, generationPath);
             }
 
+            if (metricsRows is not null)
+            {
+                int metricsSeed = baseSeed + ((options.Population + 1) * 1000);
+                SimulationConfig generationConfig = CreateGenerationConfig(simConfig, curriculum, gen);
+                (int aliveAtEnd, ulong finalChecksum) = bestGenome is null
+                    ? (0, 0UL)
+                    : ComputeEpisodeMetrics(bestGenome, generationConfig, metricsSeed);
+
+                metricsRows.Add(new RunMetricsRow
+                {
+                    Index = result.Generation,
+                    BestFitness = (float)result.BestFitness,
+                    AvgFitness = (float)result.MeanFitness,
+                    P50Fitness = MetricsStatistics.ComputePercentile(result.Fitnesses, 0.50),
+                    P90Fitness = MetricsStatistics.ComputePercentile(result.Fitnesses, 0.90),
+                    AliveAtEnd = aliveAtEnd,
+                    FinalChecksum = finalChecksum
+                });
+            }
+
             population = evolver.NextGeneration(population, result.Fitnesses, result.RawFitnesses, rng);
             WriteCheckpoint(population, evoConfig, rng.GetState(), options.ResumePath);
         }
@@ -617,6 +702,11 @@ internal static class Program
         if (finalResult is not null)
         {
             WriteRunManifest(options, evoConfig, logPath, bestOverallPath, finalResult, curriculum);
+        }
+
+        if (metricsRows is not null)
+        {
+            CsvMetricsWriter.Write(options.MetricsOut, metricsRows);
         }
     }
 
@@ -839,7 +929,9 @@ internal static class Program
         string ScenariosPath,
         bool Snapshots = false,
         int SnapshotEvery = 0,
-        string? SnapshotStreamPath = null);
+        string? SnapshotStreamPath = null,
+        bool Metrics = false,
+        string MetricsOut = "artifacts/metrics/metrics.csv");
 
     internal readonly record struct ManifestComparisonResult(bool Equivalent, IReadOnlyList<string> Differences);
 
