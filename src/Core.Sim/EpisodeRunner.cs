@@ -22,6 +22,7 @@ public sealed class EpisodeRunner
         bool captureSnapshots = false,
         int snapshotEveryNTicks = 0,
         string? snapshotsOutDir = null,
+        bool writeSnapshotsToDisk = true,
         bool stopEarlyWhenAllAgentsDead = true)
     {
         if (brain is null)
@@ -54,6 +55,7 @@ public sealed class EpisodeRunner
             captureSnapshots,
             snapshotEveryNTicks,
             snapshotsOutDir,
+            writeSnapshotsToDisk,
             stopEarlyWhenAllAgentsDead);
     }
 
@@ -65,6 +67,7 @@ public sealed class EpisodeRunner
         bool captureSnapshots = false,
         int snapshotEveryNTicks = 0,
         string? snapshotsOutDir = null,
+        bool writeSnapshotsToDisk = true,
         bool stopEarlyWhenAllAgentsDead = true)
     {
         if (brain is null)
@@ -102,6 +105,7 @@ public sealed class EpisodeRunner
             captureSnapshots,
             snapshotEveryNTicks,
             snapshotsOutDir,
+            writeSnapshotsToDisk,
             stopEarlyWhenAllAgentsDead);
     }
 
@@ -113,6 +117,7 @@ public sealed class EpisodeRunner
         bool captureSnapshots,
         int snapshotEveryNTicks,
         string? snapshotsOutDir,
+        bool writeSnapshotsToDisk,
         bool stopEarlyWhenAllAgentsDead)
     {
         int ticksSurvived = 0;
@@ -175,7 +180,7 @@ public sealed class EpisodeRunner
         ulong agentsChecksum = SimulationChecksum.Compute(simulation.Agents, simulation.Tick);
         ulong totalChecksum = SimulationChecksum.Combine(worldChecksum, agentsChecksum);
 
-        if (captureSnapshots && snapshotEveryNTicks > 0 && snapshots.Count > 0)
+        if (writeSnapshotsToDisk && captureSnapshots && snapshotEveryNTicks > 0 && snapshots.Count > 0)
         {
             string snapshotsDirectory = snapshotsOutDir ?? Path.Combine("artifacts", "snapshots");
             SnapshotJson.WriteSnapshots(snapshotsDirectory, snapshots);

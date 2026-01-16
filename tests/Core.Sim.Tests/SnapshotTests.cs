@@ -22,6 +22,7 @@ public class SnapshotTests
             2,
             captureSnapshots: true,
             snapshotEveryNTicks: snapshotEvery,
+            writeSnapshotsToDisk: false,
             stopEarlyWhenAllAgentsDead: false);
         Assert.True(firstResult.SnapshotsEnabled);
         Assert.Equal(snapshotEvery, firstResult.SnapshotEveryNTicks);
@@ -37,6 +38,7 @@ public class SnapshotTests
             2,
             captureSnapshots: true,
             snapshotEveryNTicks: snapshotEvery,
+            writeSnapshotsToDisk: false,
             stopEarlyWhenAllAgentsDead: false);
         Assert.True(secondResult.SnapshotsEnabled);
         Assert.Equal(snapshotEvery, secondResult.SnapshotEveryNTicks);
@@ -66,6 +68,7 @@ public class SnapshotTests
             3,
             captureSnapshots: true,
             snapshotEveryNTicks: snapshotEvery,
+            writeSnapshotsToDisk: false,
             stopEarlyWhenAllAgentsDead: false);
 
         Assert.True(result.SnapshotsEnabled);
