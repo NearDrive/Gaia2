@@ -20,6 +20,7 @@ internal static class Program
     private const float DefaultVisionFov = MathF.PI / 2f;
     private const int DefaultEmbeddingDimension = 8;
     private const float DefaultAgentMaxSpeed = 1.5f;
+    private const float DefaultAgentTurnRateRad = MathF.PI / 4f;
     private const float DefaultMoveDeadzone = 0.05f;
     internal const string TrainLogHeader =
         "run_id,generation,population,episodes_per_genome,world_size,obstacle_density,water_proximity_bias," +
@@ -50,16 +51,17 @@ internal static class Program
         }
 
         SimulationConfig config = new(
-            options.Seed,
-            DefaultDt,
-            options.Ticks,
-            DefaultWorldWidth,
-            DefaultWorldHeight,
-            DefaultVisionRays,
-            DefaultVisionRange,
-            DefaultVisionFov,
-            DefaultAgentMaxSpeed,
-            DefaultMoveDeadzone,
+            seed: options.Seed,
+            dt: DefaultDt,
+            ticksPerEpisode: options.Ticks,
+            worldWidth: DefaultWorldWidth,
+            worldHeight: DefaultWorldHeight,
+            agentVisionRays: DefaultVisionRays,
+            agentVisionRange: DefaultVisionRange,
+            agentFov: DefaultVisionFov,
+            agentMaxSpeed: DefaultAgentMaxSpeed,
+            agentTurnRateRad: DefaultAgentTurnRateRad,
+            moveDeadzone: DefaultMoveDeadzone,
             embeddingDimension: options.EmbeddingDimension,
             embeddingSeed: options.EmbeddingSeed);
 
