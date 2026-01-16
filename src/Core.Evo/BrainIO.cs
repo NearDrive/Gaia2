@@ -44,7 +44,21 @@ public readonly record struct BrainInput(
 
 public readonly record struct BrainOutput
 {
+    public BrainOutput()
+    {
+        RotationDelta = 0f;
+        ForwardSpeed = 0f;
+        ActionPreferenceVector = Array.Empty<float>();
+    }
+
+    public BrainOutput(float rotationDelta, float forwardSpeed, float[] actionPreferenceVector)
+    {
+        RotationDelta = rotationDelta;
+        ForwardSpeed = forwardSpeed;
+        ActionPreferenceVector = actionPreferenceVector ?? Array.Empty<float>();
+    }
+
     public float RotationDelta { get; init; }
     public float ForwardSpeed { get; init; }
-    public float[] ActionPreferenceVector { get; init; } = Array.Empty<float>();
+    public float[] ActionPreferenceVector { get; init; }
 }
