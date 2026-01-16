@@ -29,17 +29,17 @@ public class EvolutionDeterminismTests
 
         Evolver evolver = new(config);
         SimulationConfig simConfig = new(
-            Seed: seed,
-            Dt: 1f,
-            TicksPerEpisode: 50,
-            WorldWidth: 16,
-            WorldHeight: 16,
-            AgentVisionRays: 4,
-            AgentVisionRange: 6f,
-            AgentFov: MathF.PI / 2f);
+            seed: seed,
+            dt: 1f,
+            ticksPerEpisode: 50,
+            worldWidth: 16,
+            worldHeight: 16,
+            agentVisionRays: 4,
+            agentVisionRange: 6f,
+            agentFov: MathF.PI / 2f);
 
-        int inputCount = (simConfig.AgentVisionRays * 3) + 2;
-        int outputCount = 3;
+        int inputCount = BrainIO.InputCount(simConfig.AgentVisionRays, simConfig.EmbeddingDimension);
+        int outputCount = BrainIO.OutputCount;
 
         Population population = evolver.CreateInitialPopulation(seed, config.PopulationSize, inputCount, outputCount);
         Trainer trainer = new();

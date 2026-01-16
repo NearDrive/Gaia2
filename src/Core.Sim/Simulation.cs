@@ -42,7 +42,12 @@ public sealed class Simulation
             config.ObstacleDensity01,
             config.WaterProximityBias01,
             spawnHint);
-        _visionSensor = new VisionSensor(config.AgentVisionRays, config.AgentVisionRange, config.AgentFov);
+        EmbeddingRegistry embeddingRegistry = new(config.EmbeddingDimension, config.EmbeddingSeed);
+        _visionSensor = new VisionSensor(
+            config.AgentVisionRays,
+            config.AgentVisionRange,
+            config.AgentFov,
+            embeddingRegistry);
 
         for (int i = 0; i < agentCount; i += 1)
         {
@@ -89,7 +94,12 @@ public sealed class Simulation
             config.ObstacleDensity01,
             config.WaterProximityBias01,
             spawnHint);
-        _visionSensor = new VisionSensor(config.AgentVisionRays, config.AgentVisionRange, config.AgentFov);
+        EmbeddingRegistry embeddingRegistry = new(config.EmbeddingDimension, config.EmbeddingSeed);
+        _visionSensor = new VisionSensor(
+            config.AgentVisionRays,
+            config.AgentVisionRange,
+            config.AgentFov,
+            embeddingRegistry);
 
         foreach (Vector2 position in initialPositions)
         {
@@ -264,7 +274,7 @@ public sealed class Simulation
 
     private float[] CreateVisionBuffer()
     {
-        return new float[_visionSensor.RayCount * 3];
+        return new float[BrainIO.VisionInputCount(_visionSensor.RayCount, _visionSensor.EmbeddingDimension)];
     }
 
     private void ApplyMovement(AgentState agent, Vector2 delta)

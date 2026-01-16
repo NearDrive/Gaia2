@@ -50,8 +50,8 @@ public sealed class Trainer
             TicksPerEpisode = phase.TicksPerEpisode
         };
 
-        int inputCount = (generationConfig.AgentVisionRays * 3) + 2;
-        int outputCount = 3;
+        int inputCount = BrainIO.InputCount(generationConfig.AgentVisionRays, generationConfig.EmbeddingDimension);
+        int outputCount = BrainIO.OutputCount;
 
         EpisodeRunner runner = new(generationConfig);
 
