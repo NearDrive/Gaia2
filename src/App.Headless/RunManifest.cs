@@ -33,22 +33,34 @@ internal sealed record CurriculumScheduleManifest(
     CurriculumPhaseManifest Start,
     CurriculumPhaseManifest End);
 
-internal sealed record RunManifest(
-    int SchemaVersion,
-    string CreatedUtc,
-    int Seed,
-    int Generations,
-    int Population,
-    int EpisodesPerGenome,
-    int TicksPerEpisode,
-    int Parallel,
-    int MaxDegree,
-    EvolutionConfigManifest EvolutionConfig,
-    CurriculumScheduleManifest CurriculumSchedule,
-    string BestGenomePath,
-    string CheckpointPath,
-    string TrainLogPath,
-    RunManifestSummary FinalSummary);
+internal sealed record RunManifest
+{
+    public int Version { get; init; } = 1;
+    public string Mode { get; init; } = string.Empty;
+    public int Seed { get; init; }
+    public int Ticks { get; init; }
+    public string OutDir { get; init; } = string.Empty;
+    public string? MetricsPath { get; init; }
+    public string? ReplayPath { get; init; }
+    public string? SnapshotStreamPath { get; init; }
+    public int SchemaVersion { get; init; }
+    public string CreatedUtc { get; init; } = string.Empty;
+    public int Generations { get; init; }
+    public int Population { get; init; }
+    public int EpisodesPerGenome { get; init; }
+    public int TicksPerEpisode { get; init; }
+    public int Parallel { get; init; }
+    public int MaxDegree { get; init; }
+    public EvolutionConfigManifest EvolutionConfig { get; init; } = new(0, 0, 0, 0, 0, 0, 0, 0);
+    public CurriculumScheduleManifest CurriculumSchedule { get; init; } = new(
+        0,
+        new CurriculumPhaseManifest(0f, 0f, 0, 0, 0f),
+        new CurriculumPhaseManifest(0f, 0f, 0, 0, 0f));
+    public string BestGenomePath { get; init; } = string.Empty;
+    public string CheckpointPath { get; init; } = string.Empty;
+    public string TrainLogPath { get; init; } = string.Empty;
+    public RunManifestSummary FinalSummary { get; init; } = new(0, 0, 0, 0, 0, 0, 0f);
+}
 
 internal static class RunManifestJson
 {
@@ -81,9 +93,16 @@ internal static class RunManifestJson
         using Utf8JsonWriter writer = new(stream, new JsonWriterOptions { Indented = true });
 
         writer.WriteStartObject();
+        writer.WriteNumber("version", manifest.Version);
+        writer.WriteString("mode", manifest.Mode);
+        writer.WriteNumber("seed", manifest.Seed);
+        writer.WriteNumber("ticks", manifest.Ticks);
+        writer.WriteString("outDir", manifest.OutDir);
+        WriteOptionalString(writer, "metricsPath", manifest.MetricsPath);
+        WriteOptionalString(writer, "replayPath", manifest.ReplayPath);
+        WriteOptionalString(writer, "snapshotStreamPath", manifest.SnapshotStreamPath);
         writer.WriteNumber("schemaVersion", manifest.SchemaVersion);
         writer.WriteString("createdUtc", manifest.CreatedUtc);
-        writer.WriteNumber("seed", manifest.Seed);
         writer.WriteNumber("generations", manifest.Generations);
         writer.WriteNumber("population", manifest.Population);
         writer.WriteNumber("episodesPerGenome", manifest.EpisodesPerGenome);
@@ -136,6 +155,18 @@ internal static class RunManifestJson
         writer.WriteNumber("thirstRatePerSecond", phase.ThirstRatePerSecond);
         writer.WriteEndObject();
     }
+
+    private static void WriteOptionalString(Utf8JsonWriter writer, string name, string? value)
+    {
+        if (value is null)
+        {
+            writer.WriteNull(name);
+        }
+        else
+        {
+            writer.WriteString(name, value);
+        }
+    }
 }
 
 internal static class RunManifestComparer
@@ -143,6 +174,16 @@ internal static class RunManifestComparer
     public static IReadOnlyList<string> Compare(RunManifest a, RunManifest b)
     {
         List<string> differences = new();
+
+        if (a.Version != b.Version)
+        {
+            differences.Add("version");
+        }
+
+        if (!string.Equals(a.Mode, b.Mode, StringComparison.Ordinal))
+        {
+            differences.Add("mode");
+        }
 
         if (a.SchemaVersion != b.SchemaVersion)
         {
@@ -152,6 +193,31 @@ internal static class RunManifestComparer
         if (a.Seed != b.Seed)
         {
             differences.Add("seed");
+        }
+
+        if (a.Ticks != b.Ticks)
+        {
+            differences.Add("ticks");
+        }
+
+        if (!string.Equals(a.OutDir, b.OutDir, StringComparison.Ordinal))
+        {
+            differences.Add("outDir");
+        }
+
+        if (!string.Equals(a.MetricsPath, b.MetricsPath, StringComparison.Ordinal))
+        {
+            differences.Add("metricsPath");
+        }
+
+        if (!string.Equals(a.ReplayPath, b.ReplayPath, StringComparison.Ordinal))
+        {
+            differences.Add("replayPath");
+        }
+
+        if (!string.Equals(a.SnapshotStreamPath, b.SnapshotStreamPath, StringComparison.Ordinal))
+        {
+            differences.Add("snapshotStreamPath");
         }
 
         if (a.Generations != b.Generations)

@@ -29,7 +29,7 @@ internal static class Program
 
     public static int Main(string[] args)
     {
-        Options options = ParseArgs(args);
+        Options options = NormalizeOptions(ParseArgs(args));
 
         if (options.Snapshots && options.SnapshotEvery <= 0)
         {
@@ -58,6 +58,7 @@ internal static class Program
         if (options.Mode == RunMode.Benchmark)
         {
             RunBenchmark(options, config);
+            WriteOutputManifest(options);
         }
         else if (options.Mode == RunMode.Sim)
         {
@@ -77,6 +78,7 @@ internal static class Program
             Console.WriteLine($"WorldChecksum: {worldChecksum}");
             Console.WriteLine($"AgentsChecksum: {agentsChecksum}");
             Console.WriteLine($"TotalChecksum: {totalChecksum}");
+            WriteOutputManifest(options);
         }
         else if (options.Mode == RunMode.Episode)
         {
@@ -101,6 +103,7 @@ internal static class Program
                     1,
                     options.Snapshots,
                     options.SnapshotEvery,
+                    options.SnapshotDirectory,
                     writeSnapshotsToDisk: !options.Snapshots);
 
                 if (options.Snapshots)
@@ -152,7 +155,9 @@ internal static class Program
 
             if (metricsRows is not null)
             {
-                CsvMetricsWriter.Write(options.MetricsOut, metricsRows);
+                string metricsOut = options.MetricsOut
+                    ?? throw new InvalidOperationException("Metrics output path was not resolved.");
+                CsvMetricsWriter.Write(metricsOut, metricsRows);
             }
 
             if (options.Episodes > 1)
@@ -161,6 +166,8 @@ internal static class Program
                 double meanSurvival = survivalSum / options.Episodes;
                 Console.WriteLine($"meanFitness={meanFitness:0.000} minFitness={minFitness:0.000} maxFitness={maxFitness:0.000} meanSurvival={meanSurvival:0.000}");
             }
+
+            WriteOutputManifest(options);
         }
         else
         {
@@ -187,13 +194,14 @@ internal static class Program
         string resumePath = Path.Combine("artifacts", "checkpoint.json");
         string comparePathA = string.Empty;
         string comparePathB = string.Empty;
+        string outDir = string.Empty;
         string genomePath = string.Empty;
         string scenariosPath = "default";
         bool snapshots = false;
         int? snapshotEvery = null;
         string? snapshotStreamPath = null;
         bool metrics = false;
-        string metricsOut = Path.Combine("artifacts", "metrics", "metrics.csv");
+        string? metricsOut = null;
 
         for (int i = 0; i < args.Length; i += 1)
         {
@@ -228,6 +236,9 @@ internal static class Program
                     break;
                 case "--resume":
                     resumePath = ParseStringValue(args, ref i, "--resume");
+                    break;
+                case "--out-dir":
+                    outDir = ParseStringValue(args, ref i, "--out-dir");
                     break;
                 case "--parallel":
                     parallel = ParseParallelValue(args, ref i);
@@ -345,13 +356,7 @@ internal static class Program
 
         int resolvedSnapshotEvery = snapshotEvery ?? 0;
 
-        string? resolvedSnapshotStreamPath = null;
-
-        if (snapshots)
-        {
-            resolvedSnapshotStreamPath = snapshotStreamPath
-                ?? Path.Combine("artifacts", "snapshots", "snapshots.jsonl");
-        }
+        string? resolvedSnapshotStreamPath = snapshotStreamPath;
 
         return new Options(
             resolvedSeed,
@@ -367,13 +372,53 @@ internal static class Program
             resolvedMaxDegree,
             comparePathA,
             comparePathB,
+            outDir,
             genomePath,
             scenariosPath,
             snapshots,
             resolvedSnapshotEvery,
+            SnapshotDirectory: null,
             resolvedSnapshotStreamPath,
             metrics,
             metricsOut);
+    }
+
+    internal static Options NormalizeOptions(Options options)
+    {
+        string outDir = options.OutDir;
+        if (string.IsNullOrWhiteSpace(outDir))
+        {
+            outDir = Path.Combine(
+                "artifacts",
+                "runs",
+                $"run_{options.Mode.ToString().ToLowerInvariant()}_seed{options.Seed}_ticks{options.Ticks}");
+        }
+
+        string? metricsOut = options.MetricsOut;
+        if (options.Metrics && string.IsNullOrWhiteSpace(metricsOut))
+        {
+            metricsOut = Path.Combine(outDir, "metrics", "metrics.csv");
+        }
+
+        string? snapshotStreamPath = options.SnapshotStreamPath;
+        if (options.Snapshots && string.IsNullOrWhiteSpace(snapshotStreamPath))
+        {
+            snapshotStreamPath = Path.Combine(outDir, "snapshots", "snapshots.jsonl");
+        }
+
+        string? snapshotDirectory = options.SnapshotDirectory;
+        if (string.IsNullOrWhiteSpace(snapshotDirectory))
+        {
+            snapshotDirectory = Path.Combine(outDir, "snapshots");
+        }
+
+        return options with
+        {
+            OutDir = outDir,
+            MetricsOut = metricsOut,
+            SnapshotStreamPath = snapshotStreamPath,
+            SnapshotDirectory = snapshotDirectory
+        };
     }
 
     private static int ParseIntValue(string[] args, ref int index, string name)
@@ -549,6 +594,7 @@ internal static class Program
 
     internal static void RunTraining(Options options, SimulationConfig simConfig)
     {
+        options = NormalizeOptions(options);
         Directory.CreateDirectory("artifacts");
         string logPath = Path.Combine("artifacts", "train_log.csv");
         List<RunMetricsRow>? metricsRows = options.Metrics ? new List<RunMetricsRow>() : null;
@@ -701,12 +747,14 @@ internal static class Program
 
         if (finalResult is not null)
         {
-            WriteRunManifest(options, evoConfig, logPath, bestOverallPath, finalResult, curriculum);
+            WriteTrainingManifest(options, evoConfig, logPath, bestOverallPath, finalResult, curriculum);
         }
 
         if (metricsRows is not null)
         {
-            CsvMetricsWriter.Write(options.MetricsOut, metricsRows);
+            string metricsOut = options.MetricsOut
+                ?? throw new InvalidOperationException("Metrics output path was not resolved.");
+            CsvMetricsWriter.Write(metricsOut, metricsRows);
         }
     }
 
@@ -756,7 +804,47 @@ internal static class Program
         }
     }
 
-    private static void WriteRunManifest(
+    private static RunManifest CreateBaseManifest(Options options)
+    {
+        string outDir = options.OutDir;
+        string? metricsPath = options.Metrics
+            ? GetRelativePathForManifest(outDir, options.MetricsOut)
+            : null;
+        if (options.Metrics && metricsPath is null)
+        {
+            throw new InvalidOperationException("Metrics path was not resolved.");
+        }
+
+        string? snapshotStreamPath = options.Snapshots
+            ? GetRelativePathForManifest(outDir, options.SnapshotStreamPath)
+            : null;
+        if (options.Snapshots && snapshotStreamPath is null)
+        {
+            throw new InvalidOperationException("Snapshot stream path was not resolved.");
+        }
+
+        return new RunManifest
+        {
+            Version = 1,
+            Mode = options.Mode.ToString().ToLowerInvariant(),
+            Seed = options.Seed,
+            Ticks = options.Ticks,
+            OutDir = ".",
+            MetricsPath = metricsPath,
+            ReplayPath = null,
+            SnapshotStreamPath = snapshotStreamPath
+        };
+    }
+
+    internal static RunManifest WriteOutputManifest(Options options)
+    {
+        options = NormalizeOptions(options);
+        RunManifest manifest = CreateBaseManifest(options);
+        WriteRunManifestFile(options, manifest);
+        return manifest;
+    }
+
+    private static void WriteTrainingManifest(
         Options options,
         EvolutionConfig evoConfig,
         string logPath,
@@ -766,17 +854,17 @@ internal static class Program
     {
         CurriculumPhase startPhase = curriculum.GetPhase(0);
         CurriculumPhase endPhase = curriculum.GetPhase(curriculum.TotalGenerations - 1);
-        RunManifest manifest = new(
-            SchemaVersion: 2,
-            CreatedUtc: DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture),
-            Seed: options.Seed,
-            Generations: options.Generations,
-            Population: options.Population,
-            EpisodesPerGenome: options.Episodes,
-            TicksPerEpisode: options.Ticks,
-            Parallel: options.Parallel ? 1 : 0,
-            MaxDegree: options.MaxDegree,
-            EvolutionConfig: new EvolutionConfigManifest(
+        RunManifest manifest = CreateBaseManifest(options) with
+        {
+            SchemaVersion = 2,
+            CreatedUtc = string.Empty,
+            Generations = options.Generations,
+            Population = options.Population,
+            EpisodesPerGenome = options.Episodes,
+            TicksPerEpisode = options.Ticks,
+            Parallel = options.Parallel ? 1 : 0,
+            MaxDegree = options.MaxDegree,
+            EvolutionConfig = new EvolutionConfigManifest(
                 evoConfig.EliteCount,
                 evoConfig.MutationRate,
                 evoConfig.AddConnectionRate,
@@ -785,7 +873,7 @@ internal static class Program
                 evoConfig.WeightResetRate,
                 evoConfig.MaxNodes,
                 evoConfig.MaxConnections),
-            CurriculumSchedule: new CurriculumScheduleManifest(
+            CurriculumSchedule = new CurriculumScheduleManifest(
                 curriculum.TotalGenerations,
                 Start: new CurriculumPhaseManifest(
                     startPhase.WaterProximityBias01,
@@ -799,20 +887,37 @@ internal static class Program
                     endPhase.WorldSize,
                     endPhase.TicksPerEpisode,
                     endPhase.ThirstRatePerSecond)),
-            BestGenomePath: bestGenomePath ?? string.Empty,
-            CheckpointPath: options.ResumePath,
-            TrainLogPath: logPath,
-            FinalSummary: new RunManifestSummary(
+            BestGenomePath = GetRelativePathForManifest(options.OutDir, bestGenomePath) ?? string.Empty,
+            CheckpointPath = GetRelativePathForManifest(options.OutDir, options.ResumePath) ?? string.Empty,
+            TrainLogPath = GetRelativePathForManifest(options.OutDir, logPath) ?? string.Empty,
+            FinalSummary = new RunManifestSummary(
                 finalResult.BestFitness,
                 finalResult.MeanFitness,
                 finalResult.BestGenomeNodeCount,
                 finalResult.BestGenomeConnectionCount,
                 finalResult.BestTicksSurvived,
                 finalResult.BestSuccessfulDrinks,
-                finalResult.BestAvgThirst01));
+                finalResult.BestAvgThirst01)
+        };
 
-        string manifestPath = Path.Combine("artifacts", "run_manifest.json");
+        WriteRunManifestFile(options, manifest);
+    }
+
+    private static void WriteRunManifestFile(Options options, RunManifest manifest)
+    {
+        Directory.CreateDirectory(options.OutDir);
+        string manifestPath = Path.Combine(options.OutDir, "manifest.json");
         RunManifestJson.Write(manifestPath, manifest);
+    }
+
+    private static string? GetRelativePathForManifest(string outDir, string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return null;
+        }
+
+        return Path.GetRelativePath(outDir, path);
     }
 
     private static IReadOnlyList<Scenario> ResolveScenarios(string scenariosPath)
@@ -925,13 +1030,15 @@ internal static class Program
         int MaxDegree,
         string ComparePathA,
         string ComparePathB,
+        string OutDir = "",
         string GenomePath,
         string ScenariosPath,
         bool Snapshots = false,
         int SnapshotEvery = 0,
+        string? SnapshotDirectory = null,
         string? SnapshotStreamPath = null,
         bool Metrics = false,
-        string MetricsOut = "artifacts/metrics/metrics.csv");
+        string? MetricsOut = null);
 
     internal readonly record struct ManifestComparisonResult(bool Equivalent, IReadOnlyList<string> Differences);
 
