@@ -96,4 +96,20 @@ internal static class ReplayJson
 
         return replay;
     }
+
+    public static ReplayRecord Deserialize(string json)
+    {
+        if (json is null)
+        {
+            throw new ArgumentNullException(nameof(json));
+        }
+
+        ReplayRecord? replay = JsonSerializer.Deserialize<ReplayRecord>(json, ReadOptions);
+        if (replay is null)
+        {
+            throw new InvalidOperationException("Unable to deserialize replay.");
+        }
+
+        return replay;
+    }
 }

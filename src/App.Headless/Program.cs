@@ -1153,7 +1153,28 @@ internal static class Program
 
     internal static ReplayVerificationResult VerifyReplay(string path)
     {
-        ReplayRecord replay = ReplayJson.Read(path);
+        string fullPath = Path.GetFullPath(path);
+        bool exists = File.Exists(fullPath);
+        FileInfo? info = exists ? new FileInfo(fullPath) : null;
+        long length = info?.Length ?? 0;
+        DateTime mtime = info?.LastWriteTimeUtc ?? DateTime.MinValue;
+        Console.WriteLine($"[replay-verify] path={fullPath} exists={exists} bytes={length} mtimeUtc={mtime:o}");
+
+        string json = File.ReadAllText(fullPath);
+        string sha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(json)));
+        Console.WriteLine($"[replay-verify] sha256={sha256}");
+
+        ReplayRecord replay = ReplayJson.Deserialize(json);
+        int tickCount = replay.TickStates?.Count ?? 0;
+        Console.WriteLine($"[replay-verify] ticksRecorded={tickCount} expectedChecksums={tickCount}");
+        if (tickCount < 1)
+        {
+            return new ReplayVerificationResult(false, replay.Checksum, 0UL, 1, "Replay missing expected checksum for tick 1.");
+        }
+
+        ulong expectedTick1 = replay.TickStates![0].Checksum;
+        Console.WriteLine($"[replay-verify] expectedTick1={expectedTick1}");
+
         SimulationConfig config = BuildSimulationConfig(replay);
         IBrain brain = CreateBrain(replay.Brain);
         ReplayTickState[] expectedStates = replay.TickStates?.ToArray() ?? Array.Empty<ReplayTickState>();
