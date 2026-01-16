@@ -6,8 +6,9 @@ public sealed class VisionSensor
 {
     private const float StepSize = 0.25f;
     private const float QuantizeScale = 1000f;
+    private readonly EmbeddingRegistry _embeddingRegistry;
 
-    public VisionSensor(int rayCount, float maxDistance, float fovRadians)
+    public VisionSensor(int rayCount, float maxDistance, float fovRadians, EmbeddingRegistry embeddingRegistry)
     {
         if (rayCount <= 0)
         {
@@ -24,9 +25,15 @@ public sealed class VisionSensor
             throw new ArgumentOutOfRangeException(nameof(fovRadians));
         }
 
+        if (embeddingRegistry is null)
+        {
+            throw new ArgumentNullException(nameof(embeddingRegistry));
+        }
+
         RayCount = rayCount;
         MaxDistance = maxDistance;
         FovRadians = fovRadians;
+        _embeddingRegistry = embeddingRegistry;
     }
 
     public int RayCount { get; }
@@ -35,6 +42,10 @@ public sealed class VisionSensor
 
     public float FovRadians { get; }
 
+    public int EmbeddingDimension => _embeddingRegistry.Dimension;
+
+    public int OutputLength => RayCount * (EmbeddingDimension + 1);
+
     public float[] Sense(GridWorld world, Vector2 agentPos, float agentFacingRadians)
     {
         if (world is null)
@@ -42,7 +53,7 @@ public sealed class VisionSensor
             throw new ArgumentNullException(nameof(world));
         }
 
-        float[] results = new float[RayCount * 3];
+        float[] results = new float[OutputLength];
         Sense(world, agentPos, agentFacingRadians, results);
         return results;
     }
@@ -59,7 +70,7 @@ public sealed class VisionSensor
             throw new ArgumentNullException(nameof(results));
         }
 
-        if (results.Length < RayCount * 3)
+        if (results.Length < OutputLength)
         {
             throw new ArgumentException("Results buffer is too small.", nameof(results));
         }
@@ -72,8 +83,8 @@ public sealed class VisionSensor
             float angle = startAngle + (angleStep * i);
             Vector2 direction = new Vector2(MathF.Cos(angle), MathF.Sin(angle));
             float distanceNorm = 1f;
-            float embedding = 0f;
-            float affordance = 0f;
+            int baseOffset = i * (EmbeddingDimension + 1);
+            Array.Clear(results, baseOffset + 1, EmbeddingDimension);
 
             for (float distance = StepSize; distance <= MaxDistance; distance += StepSize)
             {
@@ -102,38 +113,18 @@ public sealed class VisionSensor
                 if (hit)
                 {
                     distanceNorm = Quantize(distance / MaxDistance);
-                    embedding = HashToUnitFloat(hitId);
-                    affordance = hitId == TileId.Water ? 1f : 0f;
+                    float[] embedding = _embeddingRegistry.GetTileEmbedding((int)hitId);
+                    Array.Copy(embedding, 0, results, baseOffset + 1, EmbeddingDimension);
                     break;
                 }
             }
 
-            int offset = i * 3;
-            results[offset] = distanceNorm;
-            results[offset + 1] = embedding;
-            results[offset + 2] = affordance;
+            results[baseOffset] = distanceNorm;
         }
     }
 
     private static float Quantize(float value)
     {
         return MathF.Round(value * QuantizeScale) / QuantizeScale;
-    }
-
-    private static float HashToUnitFloat(TileId id)
-    {
-        ulong state = (ulong)id + 0x9E3779B97F4A7C15UL;
-        state = SplitMix64(state);
-        double scaled = (state >> 11) * (1.0 / (1UL << 53));
-        return (float)scaled;
-    }
-
-    private static ulong SplitMix64(ulong state)
-    {
-        state += 0x9E3779B97F4A7C15UL;
-        ulong z = state;
-        z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9UL;
-        z = (z ^ (z >> 27)) * 0x94D049BB133111EBUL;
-        return z ^ (z >> 31);
     }
 }

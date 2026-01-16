@@ -18,6 +18,7 @@ internal static class Program
     private const int DefaultVisionRays = 8;
     private const float DefaultVisionRange = 10f;
     private const float DefaultVisionFov = MathF.PI / 2f;
+    private const int DefaultEmbeddingDimension = 8;
     private const float DefaultAgentMaxSpeed = 1.5f;
     private const float DefaultMoveDeadzone = 0.05f;
     internal const string TrainLogHeader =
@@ -58,7 +59,9 @@ internal static class Program
             DefaultVisionRange,
             DefaultVisionFov,
             DefaultAgentMaxSpeed,
-            DefaultMoveDeadzone);
+            DefaultMoveDeadzone,
+            embeddingDimension: options.EmbeddingDimension,
+            embeddingSeed: options.EmbeddingSeed);
 
         if (options.Mode == RunMode.Replay)
         {
@@ -631,8 +634,8 @@ internal static class Program
         string json = File.ReadAllText(genomePath);
         Genome genome = GenomeJson.Deserialize(json);
 
-        int inputCount = (simConfig.AgentVisionRays * 3) + 2;
-        int outputCount = 3;
+        int inputCount = BrainIO.InputCount(simConfig.AgentVisionRays, simConfig.EmbeddingDimension);
+        int outputCount = BrainIO.OutputCount;
 
         GenomeBrainFactory factory = new();
         return factory.CreateBrain(genome, inputCount, outputCount);
@@ -684,8 +687,8 @@ internal static class Program
         SimulationConfig simConfig,
         int seed)
     {
-        int inputCount = (simConfig.AgentVisionRays * 3) + 2;
-        int outputCount = 3;
+        int inputCount = BrainIO.InputCount(simConfig.AgentVisionRays, simConfig.EmbeddingDimension);
+        int outputCount = BrainIO.OutputCount;
         GenomeBrainFactory factory = new();
         IBrain brain = factory.CreateBrain(genome, inputCount, outputCount);
         EpisodeRunner runner = new(simConfig);
@@ -727,8 +730,8 @@ internal static class Program
                 maxConnections: 256);
 
             Evolver freshEvolver = new(evoConfig);
-            int inputCount = (simConfig.AgentVisionRays * 3) + 2;
-            int outputCount = 3;
+            int inputCount = BrainIO.InputCount(simConfig.AgentVisionRays, simConfig.EmbeddingDimension);
+            int outputCount = BrainIO.OutputCount;
             population = freshEvolver.CreateInitialPopulation(
                 options.Seed,
                 options.Population,
@@ -1122,6 +1125,8 @@ internal static class Program
             config.AgentVisionRays,
             config.AgentVisionRange,
             config.AgentFov,
+            config.EmbeddingDimension,
+            config.EmbeddingSeed,
             config.AgentMaxSpeed,
             config.MoveDeadzone,
             config.ThirstRatePerSecond,
@@ -1154,6 +1159,8 @@ internal static class Program
     private static SimulationConfig BuildSimulationConfig(ReplayRecord replay)
     {
         ReplayConfig config = replay.Config;
+        int embeddingDimension = config.EmbeddingDimension ?? DefaultEmbeddingDimension;
+        int embeddingSeed = config.EmbeddingSeed ?? replay.Seed;
         return new SimulationConfig(
             replay.Seed,
             config.Dt,
@@ -1168,7 +1175,9 @@ internal static class Program
             config.ThirstRatePerSecond,
             config.DeathGraceSeconds,
             config.WaterProximityBias01,
-            config.ObstacleDensity01);
+            config.ObstacleDensity01,
+            embeddingDimension,
+            embeddingSeed);
     }
 
     internal enum RunMode

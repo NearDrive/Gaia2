@@ -14,4 +14,6 @@ public readonly record struct SimulationConfig(
     float ThirstRatePerSecond = 0.01f,
     float DeathGraceSeconds = 3f,
     float WaterProximityBias01 = 0f,
-    float ObstacleDensity01 = 0.05f);
+    float ObstacleDensity01 = 0.05f,
+    int EmbeddingDimension = 8,
+    int EmbeddingSeed = 0);

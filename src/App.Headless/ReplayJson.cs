@@ -10,6 +10,8 @@ internal sealed record ReplayConfig(
     int AgentVisionRays,
     float AgentVisionRange,
     float AgentFov,
+    int? EmbeddingDimension,
+    int? EmbeddingSeed,
     float AgentMaxSpeed,
     float MoveDeadzone,
     float ThirstRatePerSecond,

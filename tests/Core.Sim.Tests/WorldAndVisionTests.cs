@@ -1,4 +1,5 @@
 using System.Numerics;
+using Core.Evo;
 using Core.Sim;
 using Xunit;
 
@@ -31,7 +32,8 @@ public class WorldAndVisionTests
         const int seed = 42;
         GridWorld worldA = new(32, 32, seed);
         GridWorld worldB = new(32, 32, seed);
-        VisionSensor sensor = new(8, 10f, MathF.PI / 2f);
+        EmbeddingRegistry embeddings = new(dimension: 8, seed: 101);
+        VisionSensor sensor = new(8, 10f, MathF.PI / 2f, embeddings);
         Vector2 position = new(16.5f, 16.5f);
 
         float[] first = sensor.Sense(worldA, position, 0f);
@@ -43,7 +45,43 @@ public class WorldAndVisionTests
             Assert.Equal(first[i], second[i]);
         }
 
-        Assert.Equal(8 * 3, first.Length);
+        Assert.Equal(BrainIO.VisionInputCount(8, embeddings.Dimension), first.Length);
+    }
+
+    [Fact]
+    public void Vision_OutputSize_MatchesBrainIOContract()
+    {
+        EmbeddingRegistry embeddings = new(dimension: 6, seed: 11);
+        VisionSensor sensor = new(4, 6f, MathF.PI / 3f, embeddings);
+        GridWorld world = new(16, 16, 123);
+        Vector2 position = new(8.5f, 8.5f);
+
+        float[] output = sensor.Sense(world, position, 0f);
+
+        Assert.Equal(BrainIO.VisionInputCount(4, 6), output.Length);
+    }
+
+    [Fact]
+    public void BrainIO_InputCount_AlignsWithSimulationVisionBuffer()
+    {
+        SimulationConfig config = new(
+            seed: 3,
+            dt: 1f,
+            ticksPerEpisode: 10,
+            worldWidth: 16,
+            worldHeight: 16,
+            agentVisionRays: 5,
+            agentVisionRange: 6f,
+            agentFov: MathF.PI / 2f,
+            embeddingDimension: 5,
+            embeddingSeed: 7);
+        Simulation simulation = new(config, 1);
+        int visionCount = BrainIO.VisionInputCount(config.AgentVisionRays, config.EmbeddingDimension);
+
+        Assert.Equal(visionCount, simulation.Agents[0].LastVision.Length);
+        Assert.Equal(
+            BrainIO.InputCount(config.AgentVisionRays, config.EmbeddingDimension),
+            visionCount + BrainIO.NonVisionInputCount);
     }
 
     [Fact]
