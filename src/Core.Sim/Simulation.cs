@@ -136,9 +136,13 @@ public sealed class Simulation
                 _rng.NextFloat(-1f, 1f),
                 _rng.NextFloat(-1f, 1f));
             delta *= Config.Dt;
+            if (delta != Vector2.Zero)
+            {
+                agent.UpdateHeading(NormalizeAngle(MathF.Atan2(delta.Y, delta.X)));
+            }
             ApplyMovement(agent, delta);
             float[] vision = agent.LastVision;
-            _visionSensor.Sense(World, agent.Position, 0f, vision);
+            _visionSensor.Sense(World, agent.Position, agent.HeadingRad, vision);
             agent.UpdateVision(vision);
         }
 
@@ -166,11 +170,11 @@ public sealed class Simulation
 
             BrainInput input = new(agent.LastVision, agent.Thirst01, 1f);
             BrainOutput output = brain.DecideAction(input);
-            Vector2 delta = ComputeMovementDelta(output);
+            Vector2 delta = ComputeMovementDelta(agent, output);
             ApplyMovement(agent, delta);
 
             float thirstBeforeAction = agent.Thirst01;
-            if (output.ActionDrinkScore > DrinkThreshold)
+            if (ShouldAttemptAction(output) && CanDrink(World, agent.Position))
             {
                 ApplyAction(agent, AgentAction.Drink);
             }
@@ -186,7 +190,7 @@ public sealed class Simulation
             }
 
             float[] vision = agent.LastVision;
-            _visionSensor.Sense(World, agent.Position, 0f, vision);
+            _visionSensor.Sense(World, agent.Position, agent.HeadingRad, vision);
             agent.UpdateVision(vision);
         }
 
@@ -298,24 +302,61 @@ public sealed class Simulation
         }
     }
 
-    private Vector2 ComputeMovementDelta(BrainOutput output)
+    private Vector2 ComputeMovementDelta(AgentState agent, BrainOutput output)
     {
-        Vector2 direction = new Vector2(output.MoveX, output.MoveY);
-        float magnitude = direction.Length();
+        float rotationDelta = Math.Clamp(output.RotationDelta, -1f, 1f);
+        float forwardSpeed = Math.Clamp(output.ForwardSpeed, 0f, 1f);
+        if (forwardSpeed < Config.MoveDeadzone)
+        {
+            forwardSpeed = 0f;
+        }
 
-        if (magnitude < Config.MoveDeadzone)
+        float nextHeading = NormalizeAngle(agent.HeadingRad + (rotationDelta * Config.AgentTurnRateRad));
+        agent.UpdateHeading(nextHeading);
+
+        if (forwardSpeed <= 0f)
         {
             return Vector2.Zero;
         }
 
-        if (magnitude > 1f)
+        Vector2 forward = new Vector2(MathF.Cos(nextHeading), MathF.Sin(nextHeading));
+        float speed = Config.AgentMaxSpeed * forwardSpeed;
+        return forward * (speed * Config.Dt);
+    }
+
+    private static bool ShouldAttemptAction(BrainOutput output)
+    {
+        float[] preferences = output.ActionPreferenceVector ?? Array.Empty<float>();
+        if (preferences.Length == 0)
         {
-            direction /= magnitude;
-            magnitude = 1f;
+            return false;
         }
 
-        float speed = Config.AgentMaxSpeed * magnitude;
-        return direction * (speed * Config.Dt);
+        double sum = 0.0;
+        for (int i = 0; i < preferences.Length; i += 1)
+        {
+            sum += preferences[i];
+        }
+
+        float avg = (float)(sum / preferences.Length);
+        float normalized = Math.Clamp((avg + 1f) * 0.5f, 0f, 1f);
+        return normalized > DrinkThreshold;
+    }
+
+    private static float NormalizeAngle(float angle)
+    {
+        float twoPi = MathF.PI * 2f;
+        float normalized = angle % twoPi;
+        if (normalized < -MathF.PI)
+        {
+            normalized += twoPi;
+        }
+        else if (normalized > MathF.PI)
+        {
+            normalized -= twoPi;
+        }
+
+        return normalized;
     }
 
     private static Vector2 FindSpawnNearWater(GridWorld world, Vector2 anchor, int radius)

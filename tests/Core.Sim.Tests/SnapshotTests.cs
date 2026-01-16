@@ -83,18 +83,18 @@ public class SnapshotTests
     private static SimulationConfig CreateConfig(float thirstRate = 0.05f, float deathGrace = 2f)
     {
         return new SimulationConfig(
-            0,
-            1f,
-            100,
-            8,
-            8,
-            4,
-            4f,
-            MathF.PI / 2f,
-            1.5f,
-            0.05f,
-            thirstRate,
-            deathGrace);
+            seed: 0,
+            dt: 1f,
+            ticksPerEpisode: 100,
+            worldWidth: 8,
+            worldHeight: 8,
+            agentVisionRays: 4,
+            agentVisionRange: 4f,
+            agentFov: MathF.PI / 2f,
+            agentMaxSpeed: 1.5f,
+            moveDeadzone: 0.05f,
+            thirstRatePerSecond: thirstRate,
+            deathGraceSeconds: deathGrace);
     }
 
     private static WorldSnapshot FindSnapshot(IReadOnlyList<WorldSnapshot> snapshots, int tick)

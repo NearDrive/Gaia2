@@ -12,6 +12,7 @@ public sealed class AgentState
         Position = position;
         LastVision = visionBuffer ?? Array.Empty<float>();
         Direction = Vector2.Zero;
+        HeadingRad = 0f;
         _thirst01 = 0f;
         _secondsAtMaxThirst = 0f;
         IsAlive = true;
@@ -20,6 +21,8 @@ public sealed class AgentState
     public Vector2 Position { get; private set; }
 
     public Vector2 Direction { get; private set; }
+
+    public float HeadingRad { get; private set; }
 
     public float[] LastVision { get; private set; }
 
@@ -104,5 +107,10 @@ public sealed class AgentState
     internal void UpdateDirection(Vector2 direction)
     {
         Direction = direction;
+    }
+
+    internal void UpdateHeading(float headingRad)
+    {
+        HeadingRad = headingRad;
     }
 }

@@ -1,3 +1,5 @@
+using System;
+
 namespace Core.Sim;
 
 public readonly record struct SimulationConfig
@@ -12,13 +14,15 @@ public readonly record struct SimulationConfig
         float agentVisionRange,
         float agentFov,
         float agentMaxSpeed = 1.5f,
+        float agentTurnRateRad = MathF.PI / 4f,
         float moveDeadzone = 0.05f,
         float thirstRatePerSecond = 0.01f,
         float deathGraceSeconds = 3f,
         float waterProximityBias01 = 0f,
         float obstacleDensity01 = 0.05f,
         int embeddingDimension = 8,
-        int embeddingSeed = 0)
+        int embeddingSeed = 0,
+        int actionPreferenceCount = 4)
     {
         Seed = seed;
         Dt = dt;
@@ -29,6 +33,7 @@ public readonly record struct SimulationConfig
         AgentVisionRange = agentVisionRange;
         AgentFov = agentFov;
         AgentMaxSpeed = agentMaxSpeed;
+        AgentTurnRateRad = agentTurnRateRad;
         MoveDeadzone = moveDeadzone;
         ThirstRatePerSecond = thirstRatePerSecond;
         DeathGraceSeconds = deathGraceSeconds;
@@ -36,6 +41,7 @@ public readonly record struct SimulationConfig
         ObstacleDensity01 = obstacleDensity01;
         EmbeddingDimension = embeddingDimension;
         EmbeddingSeed = embeddingSeed;
+        ActionPreferenceCount = actionPreferenceCount;
     }
 
     public int Seed { get; init; }
@@ -47,6 +53,7 @@ public readonly record struct SimulationConfig
     public float AgentVisionRange { get; init; }
     public float AgentFov { get; init; }
     public float AgentMaxSpeed { get; init; }
+    public float AgentTurnRateRad { get; init; }
     public float MoveDeadzone { get; init; }
     public float ThirstRatePerSecond { get; init; }
     public float DeathGraceSeconds { get; init; }
@@ -54,4 +61,5 @@ public readonly record struct SimulationConfig
     public float ObstacleDensity01 { get; init; }
     public int EmbeddingDimension { get; init; }
     public int EmbeddingSeed { get; init; }
+    public int ActionPreferenceCount { get; init; }
 }

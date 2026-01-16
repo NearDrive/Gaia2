@@ -17,6 +17,7 @@ public static class SimulationChecksum
         foreach (AgentState agent in agents)
         {
             AddPosition(ref hash, agent.Position);
+            AddHeading(ref hash, agent.HeadingRad);
             AddThirst(ref hash, agent.Thirst01);
             Add(ref hash, agent.IsAlive ? (byte)1 : (byte)0);
         }
@@ -43,6 +44,12 @@ public static class SimulationChecksum
     private static void AddThirst(ref ulong hash, float thirst01)
     {
         int quantized = (int)MathF.Round(thirst01 * 1000f);
+        Add(ref hash, quantized);
+    }
+
+    private static void AddHeading(ref ulong hash, float headingRad)
+    {
+        int quantized = (int)MathF.Round(headingRad * 1000f);
         Add(ref hash, quantized);
     }
 

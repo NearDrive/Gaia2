@@ -13,11 +13,13 @@ internal sealed record ReplayConfig(
     int? EmbeddingDimension,
     int? EmbeddingSeed,
     float AgentMaxSpeed,
+    float AgentTurnRateRad,
     float MoveDeadzone,
     float ThirstRatePerSecond,
     float DeathGraceSeconds,
     float WaterProximityBias01,
-    float ObstacleDensity01);
+    float ObstacleDensity01,
+    int ActionPreferenceCount);
 
 internal sealed record ReplayRecord(
     int SchemaVersion,
@@ -26,10 +28,23 @@ internal sealed record ReplayRecord(
     int Agents,
     string Brain,
     ReplayConfig Config,
-    ulong Checksum)
+    ulong Checksum,
+    IReadOnlyList<ReplayTickState>? TickStates)
 {
-    public const int CurrentSchemaVersion = 1;
+    public const int CurrentSchemaVersion = 3;
 }
+
+internal sealed record ReplayAgentState(
+    float X,
+    float Y,
+    float HeadingRad,
+    float Thirst01,
+    bool Alive);
+
+internal sealed record ReplayTickState(
+    int Tick,
+    ulong Checksum,
+    IReadOnlyList<ReplayAgentState> Agents);
 
 internal static class ReplayJson
 {
@@ -74,6 +89,22 @@ internal static class ReplayJson
         string json = File.ReadAllText(path);
         ReplayRecord? replay = JsonSerializer.Deserialize<ReplayRecord>(json, ReadOptions);
 
+        if (replay is null)
+        {
+            throw new InvalidOperationException("Unable to deserialize replay.");
+        }
+
+        return replay;
+    }
+
+    public static ReplayRecord Deserialize(string json)
+    {
+        if (json is null)
+        {
+            throw new ArgumentNullException(nameof(json));
+        }
+
+        ReplayRecord? replay = JsonSerializer.Deserialize<ReplayRecord>(json, ReadOptions);
         if (replay is null)
         {
             throw new InvalidOperationException("Unable to deserialize replay.");

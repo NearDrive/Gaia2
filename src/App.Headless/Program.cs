@@ -20,6 +20,7 @@ internal static class Program
     private const float DefaultVisionFov = MathF.PI / 2f;
     private const int DefaultEmbeddingDimension = 8;
     private const float DefaultAgentMaxSpeed = 1.5f;
+    private const float DefaultAgentTurnRateRad = MathF.PI / 4f;
     private const float DefaultMoveDeadzone = 0.05f;
     internal const string TrainLogHeader =
         "run_id,generation,population,episodes_per_genome,world_size,obstacle_density,water_proximity_bias," +
@@ -50,16 +51,17 @@ internal static class Program
         }
 
         SimulationConfig config = new(
-            options.Seed,
-            DefaultDt,
-            options.Ticks,
-            DefaultWorldWidth,
-            DefaultWorldHeight,
-            DefaultVisionRays,
-            DefaultVisionRange,
-            DefaultVisionFov,
-            DefaultAgentMaxSpeed,
-            DefaultMoveDeadzone,
+            seed: options.Seed,
+            dt: DefaultDt,
+            ticksPerEpisode: options.Ticks,
+            worldWidth: DefaultWorldWidth,
+            worldHeight: DefaultWorldHeight,
+            agentVisionRays: DefaultVisionRays,
+            agentVisionRange: DefaultVisionRange,
+            agentFov: DefaultVisionFov,
+            agentMaxSpeed: DefaultAgentMaxSpeed,
+            agentTurnRateRad: DefaultAgentTurnRateRad,
+            moveDeadzone: DefaultMoveDeadzone,
             embeddingDimension: options.EmbeddingDimension,
             embeddingSeed: options.EmbeddingSeed);
 
@@ -67,6 +69,8 @@ internal static class Program
         {
             ReplayRecord replay = CreateReplayRecord(options, config);
             ReplayJson.Write(options.ReplayOutputPath, replay);
+            string outputPath = Path.GetFullPath(options.ReplayOutputPath);
+            Console.WriteLine($"Wrote replay to: {outputPath}");
             return 0;
         }
 
@@ -635,7 +639,7 @@ internal static class Program
         Genome genome = GenomeJson.Deserialize(json);
 
         int inputCount = BrainIO.InputCount(simConfig.AgentVisionRays, simConfig.EmbeddingDimension);
-        int outputCount = BrainIO.OutputCount;
+        int outputCount = BrainIO.OutputCount(simConfig.ActionPreferenceCount);
 
         GenomeBrainFactory factory = new();
         return factory.CreateBrain(genome, inputCount, outputCount);
@@ -688,7 +692,7 @@ internal static class Program
         int seed)
     {
         int inputCount = BrainIO.InputCount(simConfig.AgentVisionRays, simConfig.EmbeddingDimension);
-        int outputCount = BrainIO.OutputCount;
+        int outputCount = BrainIO.OutputCount(simConfig.ActionPreferenceCount);
         GenomeBrainFactory factory = new();
         IBrain brain = factory.CreateBrain(genome, inputCount, outputCount);
         EpisodeRunner runner = new(simConfig);
@@ -731,7 +735,7 @@ internal static class Program
 
             Evolver freshEvolver = new(evoConfig);
             int inputCount = BrainIO.InputCount(simConfig.AgentVisionRays, simConfig.EmbeddingDimension);
-            int outputCount = BrainIO.OutputCount;
+            int outputCount = BrainIO.OutputCount(simConfig.ActionPreferenceCount);
             population = freshEvolver.CreateInitialPopulation(
                 options.Seed,
                 options.Population,
@@ -1115,8 +1119,8 @@ internal static class Program
     internal static ReplayRecord CreateReplayRecord(Options options, SimulationConfig config)
     {
         IBrain brain = CreateBrain(options.Brain);
-        EpisodeRunner runner = new(config);
-        EpisodeResult result = runner.RunEpisode(brain, options.Seed, options.Ticks, options.Agents);
+        ReplayTickState[] tickStates = BuildReplayTicks(brain, config, options.Ticks, options.Agents, stopEarlyWhenAllAgentsDead: true);
+        ulong checksum = tickStates.Length > 0 ? tickStates[^1].Checksum : 0UL;
 
         ReplayConfig replayConfig = new(
             config.Dt,
@@ -1128,11 +1132,13 @@ internal static class Program
             config.EmbeddingDimension,
             config.EmbeddingSeed,
             config.AgentMaxSpeed,
+            config.AgentTurnRateRad,
             config.MoveDeadzone,
             config.ThirstRatePerSecond,
             config.DeathGraceSeconds,
             config.WaterProximityBias01,
-            config.ObstacleDensity01);
+            config.ObstacleDensity01,
+            config.ActionPreferenceCount);
 
         return new ReplayRecord(
             ReplayRecord.CurrentSchemaVersion,
@@ -1141,19 +1147,72 @@ internal static class Program
             options.Agents,
             options.Brain,
             replayConfig,
-            result.Checksum);
+            checksum,
+            tickStates);
     }
 
     internal static ReplayVerificationResult VerifyReplay(string path)
     {
-        ReplayRecord replay = ReplayJson.Read(path);
+        string fullPath = Path.GetFullPath(path);
+        bool exists = File.Exists(fullPath);
+        FileInfo? info = exists ? new FileInfo(fullPath) : null;
+        long length = info?.Length ?? 0;
+        DateTime mtime = info?.LastWriteTimeUtc ?? DateTime.MinValue;
+        Console.WriteLine($"[replay-verify] path={fullPath} exists={exists} bytes={length} mtimeUtc={mtime:o}");
+
+        string json = File.ReadAllText(fullPath);
+        string sha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(json)));
+        Console.WriteLine($"[replay-verify] sha256={sha256}");
+
+        ReplayRecord replay = ReplayJson.Deserialize(json);
+        int tickCount = replay.TickStates?.Count ?? 0;
+        Console.WriteLine($"[replay-verify] ticksRecorded={tickCount} expectedChecksums={tickCount}");
+        if (tickCount < 1)
+        {
+            return new ReplayVerificationResult(false, replay.Checksum, 0UL, 1, "Replay missing expected checksum for tick 1.");
+        }
+
+        ulong expectedTick1 = replay.TickStates![0].Checksum;
+        Console.WriteLine($"[replay-verify] expectedTick1={expectedTick1}");
+
         SimulationConfig config = BuildSimulationConfig(replay);
         IBrain brain = CreateBrain(replay.Brain);
-        EpisodeRunner runner = new(config);
-        EpisodeResult result = runner.RunEpisode(brain, replay.Seed, replay.Ticks, replay.Agents);
-        bool verified = result.Checksum == replay.Checksum;
+        ReplayTickState[] expectedStates = replay.TickStates?.ToArray() ?? Array.Empty<ReplayTickState>();
+        if (expectedStates.Length == 0)
+        {
+            EpisodeRunner runner = new(config);
+            EpisodeResult result = runner.RunEpisode(brain, replay.Seed, replay.Ticks, replay.Agents);
+            bool verified = result.Checksum == replay.Checksum;
+            string? reason = verified ? null : "Checksum mismatch.";
+            return new ReplayVerificationResult(verified, replay.Checksum, result.Checksum, null, reason);
+        }
 
-        return new ReplayVerificationResult(verified, replay.Checksum, result.Checksum);
+        ReplayTickState[] actualStates = BuildReplayTicks(brain, config, replay.Ticks, replay.Agents, stopEarlyWhenAllAgentsDead: true);
+        int max = Math.Min(expectedStates.Length, actualStates.Length);
+        for (int i = 0; i < max; i += 1)
+        {
+            ReplayTickState expected = expectedStates[i];
+            ReplayTickState actual = actualStates[i];
+            if (expected.Checksum != actual.Checksum)
+            {
+                string reason = DescribeMismatch(expected, actual);
+                ulong actualChecksum = actualStates.Length > 0 ? actualStates[^1].Checksum : 0UL;
+                return new ReplayVerificationResult(false, replay.Checksum, actualChecksum, expected.Tick, reason);
+            }
+        }
+
+        if (expectedStates.Length != actualStates.Length)
+        {
+            int mismatchTick = max > 0 ? expectedStates[max - 1].Tick + 1 : 0;
+            string reason = $"Tick count mismatch. Expected {expectedStates.Length}, actual {actualStates.Length}.";
+            ulong actualChecksum = actualStates.Length > 0 ? actualStates[^1].Checksum : 0UL;
+            return new ReplayVerificationResult(false, replay.Checksum, actualChecksum, mismatchTick, reason);
+        }
+
+        ulong finalChecksum = actualStates.Length > 0 ? actualStates[^1].Checksum : 0UL;
+        bool finalVerified = finalChecksum == replay.Checksum;
+        string? finalReason = finalVerified ? null : "Final checksum mismatch.";
+        return new ReplayVerificationResult(finalVerified, replay.Checksum, finalChecksum, null, finalReason);
     }
 
     private static SimulationConfig BuildSimulationConfig(ReplayRecord replay)
@@ -1171,13 +1230,15 @@ internal static class Program
             config.AgentVisionRange,
             config.AgentFov,
             config.AgentMaxSpeed,
+            config.AgentTurnRateRad,
             config.MoveDeadzone,
             config.ThirstRatePerSecond,
             config.DeathGraceSeconds,
             config.WaterProximityBias01,
             config.ObstacleDensity01,
             embeddingDimension,
-            embeddingSeed);
+            embeddingSeed,
+            config.ActionPreferenceCount);
     }
 
     internal enum RunMode
@@ -1222,7 +1283,107 @@ internal static class Program
 
     internal readonly record struct ManifestComparisonResult(bool Equivalent, IReadOnlyList<string> Differences);
 
-    internal readonly record struct ReplayVerificationResult(bool Verified, ulong ExpectedChecksum, ulong ActualChecksum);
+    internal readonly record struct ReplayVerificationResult(
+        bool Verified,
+        ulong ExpectedChecksum,
+        ulong ActualChecksum,
+        int? MismatchTick,
+        string? MismatchReason);
+
+    private static ReplayTickState[] BuildReplayTicks(
+        IBrain brain,
+        SimulationConfig config,
+        int ticks,
+        int agents,
+        bool stopEarlyWhenAllAgentsDead)
+    {
+        Simulation simulation = new(config, agents);
+        List<ReplayTickState> states = new(ticks);
+
+        for (int tick = 0; tick < ticks; tick += 1)
+        {
+            simulation.Step(brain);
+            states.Add(BuildReplayTickState(simulation));
+
+            if (stopEarlyWhenAllAgentsDead && AreAllAgentsDead(simulation.Agents))
+            {
+                break;
+            }
+        }
+
+        return states.ToArray();
+    }
+
+    private static ReplayTickState BuildReplayTickState(Simulation simulation)
+    {
+        AgentState[] agents = simulation.Agents.ToArray();
+        ReplayAgentState[] agentStates = new ReplayAgentState[agents.Length];
+        for (int i = 0; i < agents.Length; i += 1)
+        {
+            AgentState agent = agents[i];
+            agentStates[i] = new ReplayAgentState(
+                agent.Position.X,
+                agent.Position.Y,
+                agent.HeadingRad,
+                agent.Thirst01,
+                agent.IsAlive);
+        }
+
+        ulong worldChecksum = simulation.World.ComputeChecksum();
+        ulong agentsChecksum = SimulationChecksum.Compute(agents, simulation.Tick);
+        ulong checksum = SimulationChecksum.Combine(worldChecksum, agentsChecksum);
+        return new ReplayTickState(simulation.Tick, checksum, agentStates);
+    }
+
+    private static bool AreAllAgentsDead(IReadOnlyList<AgentState> agents)
+    {
+        foreach (AgentState agent in agents)
+        {
+            if (agent.IsAlive)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static string DescribeMismatch(ReplayTickState expected, ReplayTickState actual)
+    {
+        if (expected.Agents.Count != actual.Agents.Count)
+        {
+            return $"Agent count mismatch. Expected {expected.Agents.Count}, actual {actual.Agents.Count}.";
+        }
+
+        const float epsilon = 0.0001f;
+        for (int i = 0; i < expected.Agents.Count; i += 1)
+        {
+            ReplayAgentState expectedAgent = expected.Agents[i];
+            ReplayAgentState actualAgent = actual.Agents[i];
+
+            if (MathF.Abs(expectedAgent.X - actualAgent.X) > epsilon || MathF.Abs(expectedAgent.Y - actualAgent.Y) > epsilon)
+            {
+                return $"Agent {i} position mismatch.";
+            }
+
+            if (MathF.Abs(expectedAgent.HeadingRad - actualAgent.HeadingRad) > epsilon)
+            {
+                return $"Agent {i} heading mismatch.";
+            }
+
+            if (MathF.Abs(expectedAgent.Thirst01 - actualAgent.Thirst01) > epsilon)
+            {
+                return $"Agent {i} thirst mismatch.";
+            }
+
+            if (expectedAgent.Alive != actualAgent.Alive)
+            {
+                return $"Agent {i} alive mismatch.";
+            }
+        }
+
+        return "Checksum mismatch.";
+    }
 
     private static StreamWriter CreateTrainLogWriter(string logPath)
     {
@@ -1291,11 +1452,10 @@ internal static class Program
     {
         public BrainOutput DecideAction(BrainInput input)
         {
-            float drinkScore = input.Thirst01 > 0.6f ? 1f : 0f;
             return new BrainOutput
             {
-                MoveX = 0.5f,
-                ActionDrinkScore = drinkScore
+                ForwardSpeed = 0.5f,
+                ActionPreferenceVector = new[] { input.Thirst01 > 0.6f ? 1f : -1f }
             };
         }
     }
@@ -1304,12 +1464,11 @@ internal static class Program
     {
         public BrainOutput DecideAction(BrainInput input)
         {
-            float drinkScore = input.Thirst01 > 0.5f ? 1f : 0f;
             return new BrainOutput
             {
-                MoveX = 0.25f,
-                MoveY = -0.15f,
-                ActionDrinkScore = drinkScore
+                RotationDelta = -0.15f,
+                ForwardSpeed = 0.25f,
+                ActionPreferenceVector = new[] { input.Thirst01 > 0.5f ? 1f : -1f }
             };
         }
     }
