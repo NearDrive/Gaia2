@@ -69,6 +69,8 @@ internal static class Program
         {
             ReplayRecord replay = CreateReplayRecord(options, config);
             ReplayJson.Write(options.ReplayOutputPath, replay);
+            string outputPath = Path.GetFullPath(options.ReplayOutputPath);
+            Console.WriteLine($"Wrote replay to: {outputPath}");
             return 0;
         }
 
