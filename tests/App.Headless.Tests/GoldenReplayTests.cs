@@ -19,7 +19,10 @@ public class GoldenReplayTests
         foreach (string replayPath in replayPaths)
         {
             Program.ReplayVerificationResult result = Program.VerifyReplay(replayPath);
-            Assert.True(result.Verified, $"Replay verification failed for {replayPath}");
+            string details = result.MismatchReason is not null
+                ? $" Tick={result.MismatchTick?.ToString() ?? "unknown"} Reason={result.MismatchReason} Expected={result.ExpectedChecksum} Actual={result.ActualChecksum}"
+                : $" Expected={result.ExpectedChecksum} Actual={result.ActualChecksum}";
+            Assert.True(result.Verified, $"Replay verification failed for {replayPath}.{details}");
         }
     }
 

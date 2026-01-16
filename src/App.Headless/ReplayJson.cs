@@ -28,10 +28,23 @@ internal sealed record ReplayRecord(
     int Agents,
     string Brain,
     ReplayConfig Config,
-    ulong Checksum)
+    ulong Checksum,
+    IReadOnlyList<ReplayTickState>? TickStates)
 {
-    public const int CurrentSchemaVersion = 2;
+    public const int CurrentSchemaVersion = 3;
 }
+
+internal sealed record ReplayAgentState(
+    float X,
+    float Y,
+    float HeadingRad,
+    float Thirst01,
+    bool Alive);
+
+internal sealed record ReplayTickState(
+    int Tick,
+    ulong Checksum,
+    IReadOnlyList<ReplayAgentState> Agents);
 
 internal static class ReplayJson
 {
