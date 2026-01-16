@@ -2,4 +2,8 @@
   <PropertyGroup>
     <AssemblyName>Persistence</AssemblyName>
   </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\\Core.Sim\\Core.Sim.csproj" />
+  </ItemGroup>
 </Project>

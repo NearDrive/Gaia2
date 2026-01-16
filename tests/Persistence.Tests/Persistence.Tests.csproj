@@ -15,5 +15,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Persistence\Persistence.csproj" />
+    <ProjectReference Include="..\..\src\Core.Sim\Core.Sim.csproj" />
   </ItemGroup>
 </Project>
